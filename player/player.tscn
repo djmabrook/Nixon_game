@@ -1,17 +1,9 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://player/player.gd" id="1"]
+[ext_resource type="Script" path="res://player/little_man_model.gd" id="2"]
 
 [sub_resource type="CapsuleShape3D" id="shape"]
-radius = 0.25
-height = 1.7
-
-[sub_resource type="StandardMaterial3D" id="mat"]
-albedo_color = Color(0.95, 0.95, 0.9, 1)
-roughness = 1.0
-
-[sub_resource type="CapsuleMesh" id="mesh"]
-material = SubResource("mat")
 radius = 0.25
 height = 1.7
 
@@ -26,22 +18,13 @@ shape = SubResource("shape")
 
 [node name="Visual" type="Node3D" parent="."]
 
-[node name="Body" type="MeshInstance3D" parent="Visual"]
-cast_shadow = 0
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
-mesh = SubResource("mesh")
-
-[node name="Nose" type="MeshInstance3D" parent="Visual"]
-cast_shadow = 0
-transform = Transform3D(0.15, 0, 0, 0, 0.15, 0, 0, 0, 0.15, 0, 1.4, -0.25)
-mesh = SubResource("mesh")
+[node name="Model" type="Node3D" parent="Visual"]
+script = ExtResource("2")
 
 [node name="CarrySlot" type="Node3D" parent="Visual"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.32, 0.85, -0.1)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.1, -0.35)
 
 [node name="ShadowCaster" type="Node3D" parent="."]
 
-[node name="Body" type="MeshInstance3D" parent="ShadowCaster"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
-cast_shadow = 3
-mesh = SubResource("mesh")
+[node name="Model" type="Node3D" parent="ShadowCaster"]
+script = ExtResource("2")

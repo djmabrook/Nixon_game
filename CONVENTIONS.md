@@ -78,7 +78,7 @@ func _on_room_entered(_spawn: StringName) -> void:
 
 Things you can bend without touching shared code:
 
-- **Player** (`Game.player`): `move_speed`, `run_speed`, `gravity`, `input_scale`, `controls_enabled`, `velocity`,
+- **Player** (`Game.player`): `model` (`play(&"caught")`, `set_tint(color)`; set `animation_locked` while you drive clips), `move_speed`, `run_speed`, `gravity`, `input_scale`, `controls_enabled`, `velocity`,
   `walking_changed` signal, `facing`.
 - **Camera**: see the camera section below. Set `use_default_camera = false` to bring your own
   `Camera3D` and call `make_current()` yourself.
@@ -116,9 +116,20 @@ saved to `user://save.json` on every change.
   `droop_with_inks` and it droops a third per ink and closes at three. Art can replace the meshes but
   keep the node names `Screen/LeftEye|RightEye/{White,Pupil,Lid}`.
 
+## The little man
+
+`player/model/` holds the approved rigged model (rust #a8452a, no face, faces +Z in the file) and its
+clips: `idle`, `walk`, `run`, `carry_idle`, `carry_walk`, `climb`, `caught`. `LittleManModel` merges
+them into one AnimationPlayer; the Player picks idle/walk/run (or the carry versions while
+`Game.carried` is set) and scales playback to ground speed (`walk_anim_speed`, `run_anim_speed`).
+For the Watcher catching him: `Game.player.animation_locked = true`, `Game.player.model.play(&"caught")`.
+A region may recolour him with `Game.player.model.set_tint(Color(...))`; `LittleManModel.RUST` restores it.
+He always casts a real shadow (the late one), never a blob. Indoors keep `camera_distance` small;
+in open country push it out so he's a few pixels tall.
+
 ## Scale
 
-**1 unit = 1 meter.** The little man is 1.7 m tall, walks at 5 m/s and runs at 10 m/s.
+**1 unit = 1 meter.** The little man is 1.7 m tall, walks at 3.5 m/s and runs at 9 m/s.
 
 | Thing | Size |
 |---|---|

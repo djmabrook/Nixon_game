@@ -214,6 +214,11 @@ func _set_dawn(t: float) -> void:
 	sun.y = 0.08
 	sun = sun.normalized()
 	_sky_mat.set_shader_parameter("sun_dir", sun)
+	var ra := hub.get_node_or_null(^"RoomAudio")
+	if ra:
+		ra.set("bed", &"bed_dawn" if t > 0.5 else &"bed_hub_night")
+	if hub.sound() and Game.current_room == hub:
+		hub.sound().set_bed(&"bed_dawn" if t > 0.5 else &"bed_hub_night")
 	if t > 0.5:
 		_moon.light_color = Color(1.0, 0.82, 0.62)
 		_moon.light_energy = 1.3
@@ -272,6 +277,8 @@ func _plant(ink_id: StringName) -> void:
 			hub.refresh_arms()
 		, 0.0, 1.0, fill_time).set_trans(Tween.TRANS_SINE)
 		await tw.finished
+	if hub.sound():
+		hub.sound().play(StringName("ink_%s_home" % ink_id))
 	var done := planted()
 	done.append(ink_id)
 	Game.set_meta(PLANTED_META, done)
@@ -301,6 +308,10 @@ func _open_eye() -> void:
 		_sand_mat.set_shader_parameter("eye_rings", _rings(k + 1))
 		await get_tree().create_timer(0.7).timeout
 	# It blinks once.
+	var pit: Vector3 = hub.get_node("Vortex").global_position
+	if hub.sound():
+		hub.sound().play_at(&"eyelids_close", pit)
+		hub.sound().giant(&"giant_boom", pit, 1000.0)
 	var blink := create_tween()
 	blink.tween_method(func(v: float) -> void: _sand_mat.set_shader_parameter("lid", v), 0.0, 1.0, 0.35).set_ease(Tween.EASE_IN)
 	blink.tween_interval(0.25)
@@ -326,6 +337,8 @@ func _uncoil_unlocked() -> void:
 			continue
 		_shot_over_arm(i, 8.0)
 		await get_tree().create_timer(2.5).timeout
+		if hub.sound():
+			hub.sound().play(&"ink_ultraviolet_take")
 		var tw := create_tween()
 		tw.tween_method(func(rr: float) -> void:
 			hub.set_arm_reach(i, rr)

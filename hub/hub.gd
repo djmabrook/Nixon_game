@@ -73,6 +73,8 @@ var _arm_reach: Array[float] = []
 var _open: Array[bool] = []
 var _stakes: Array = []
 var _room_inks := {}   # room id -> the ink it gives
+var _broadcast: Node
+var _was_sliding := false
 
 @onready var _sand: StaticBody3D = $SandVortex
 @onready var _vortex: RoomExit = $Vortex
@@ -143,6 +145,31 @@ func _ready() -> void:
 	var tv: Node3D = $WatchingSet
 	var tv_spot: Node3D = $StoryAnchors/first_tv
 	tv.position = tv_spot.position + Vector3.DOWN * 1.2
+	_add_audio()
+
+
+## Sound (audio/AUDIO.md). Added only when the sound system is in the project, so the hub
+## works with or without it: the night bed and sand footsteps, and the television's broadcast.
+func _add_audio() -> void:
+	if ResourceLoader.exists("res://audio/room_audio.gd"):
+		var ra: Node = load("res://audio/room_audio.gd").new()
+		ra.name = "RoomAudio"
+		ra.set("bed", &"bed_hub_night")
+		ra.set("surface", &"sand")
+		ra.set("lateness", 1.5)
+		ra.set("near_room_size", 0.8)
+		ra.set("far_room_size", 1.0)
+		add_child(ra)
+	if ResourceLoader.exists("res://audio/watcher_broadcast.gd"):
+		var wb: Node = load("res://audio/watcher_broadcast.gd").new()
+		wb.name = "Broadcast"
+		$WatchingSet.add_child(wb)
+		_broadcast = wb
+
+
+## The Sound autoload, if the project has one.
+func sound() -> Node:
+	return get_node_or_null(^"/root/Sound")
 
 
 ## A stable, saturated color per room id, so a room keeps its color as rooms are added.
@@ -430,6 +457,17 @@ func _process(delta: float) -> void:
 		var k := 1.0 - exp(-1.2 * delta)
 		cam.distance = lerpf(cam.distance, _distance_for(r) * (1.0 + 0.6 * _sliding), k)
 		cam.set_base_fov(lerpf(cam.fov, lerpf(_fov_for(r), slide_fov, _sliding), k))
+	# The television's broadcast: louder as he nears it, lower as its eyes droop.
+	if _broadcast:
+		var near := 1.0 - smoothstep(15.0, 260.0, p.global_position.distance_to($WatchingSet.global_position))
+		var awake := 1.0 - Game.ink_progress()
+		_broadcast.set("presence", near * awake)
+		_broadcast.set("stare", 0.35 * awake * near)
+	# The sand rumbles when a groove takes you as a slide.
+	var sliding := _sliding > 0.5
+	if sliding and not _was_sliding and sound():
+		sound().giant(&"giant_rumble", p.global_position, 300.0)
+	_was_sliding = sliding
 	# Light up the groove you are standing on.
 	var arm := _arm_under(p.global_position)
 	_focus = lerpf(_focus, 1.0 if arm >= 0 else 0.0, 1.0 - exp(-6.0 * delta))
@@ -470,6 +508,8 @@ func _on_swallowed(p: Player, room_id: StringName) -> void:
 	p.velocity = Vector3.ZERO
 	p.set_physics_process(false)   # the tween drives him now; no gravity fighting it
 	var center := _vortex.global_position
+	if sound():
+		sound().giant(&"giant_rumble", center, 300.0)
 	var start := p.global_position - center
 	var start_r := Vector2(start.x, start.z).length()
 	var start_a := atan2(start.z, start.x)

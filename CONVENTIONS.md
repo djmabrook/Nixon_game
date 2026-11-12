@@ -3,15 +3,19 @@
 Read this before adding anything. Several people (and Claude threads) build this game in
 parallel, each in its own folder, so the rules below are what keep us from stepping on each other.
 
-Engine: **Godot 4.3+** (GDScript, Forward+). The game has **no words**: no text in UI, rooms, or menus.
+Engine: **Godot 4.7** (GDScript, Forward+). The game has **no words**: no text in UI, rooms, or menus.
+
+**The feel: small protagonist, big weird world.** A third-person camera behind a tiny figure, landscapes
+hundreds of meters to kilometers across, landmarks that dwarf him, fog that swallows distance, and the
+dither look over everything. Keep it original: our own places, shapes and palettes.
 
 ## Folders
 
 | Folder | What lives there | Owner |
 |---|---|---|
-| `core/` | Game autoload, `Room`, `RoomSpawn`, `RoomExit` | foundation (change only with care) |
+| `core/` | Game autoload, `Room`, `RoomSpawn`, `RoomExit`, `VistaZone` | foundation (change only with care) |
 | `player/` | The little man | foundation; sprites thread swaps the visual |
-| `camera/` | `IsoCamera` | foundation |
+| `camera/` | `FollowCamera` (third-person orbit) | foundation |
 | `hub/` | The sand spiral hub (`hub/hub.tscn`, room id `hub`) | hub thread |
 | `rooms/<room_id>/` | One folder per room, fully self-contained | one thread per room |
 | `rooms/_template/` | Copy this to start a room. Never loaded by the game | foundation |
@@ -31,7 +35,7 @@ A room's own assets (textures, sounds, scripts) go inside its room folder, not i
 - Nodes in scenes: `PascalCase` (`ExitToHub`, `Floor`). Exception: `RoomSpawn` nodes are named
   after where the player comes from (`from_hub`, or a room id inside the hub).
 - `class_name` only for things other folders use. Prefix nothing; keep names plain.
-- Input actions: `move_left`, `move_right`, `move_up`, `move_down`, `interact`, `pause`.
+- Input actions: `move_left/right/up/down`, `look_left/right/up/down`, `run`, `focus`, `interact`, `pause`.
   Add new actions only if no existing one fits.
 
 ## The room contract
@@ -48,12 +52,14 @@ Each room must have:
    with `target_room = hub`. Leave `target_spawn` empty and the player comes out at this room's door.
    You can also call `exit_to_hub()` from code (after a death, a fade, a rule twist).
 3. **Ground with collision** on physics layer 1 (`world`).
+4. **A landmark**, set as the room's `focus_target`: the huge thing the player orients by.
+5. **Its own `WorldEnvironment`** with fog, so distance reads as distance.
 
 Rooms must **not** contain the player or a camera. `Game` adds both after the room enters the tree:
 
 ```
 Game.go_to(room_id, spawn)  ->  fade out, free old room
-                            ->  instance rooms/<id>/room.tscn, add Player + IsoCamera
+                            ->  instance rooms/<id>/room.tscn, add Player + FollowCamera
                             ->  room._on_room_entered(spawn), room_entered signal, fade in
 ```
 
@@ -71,17 +77,51 @@ func _on_room_entered(_spawn: StringName) -> void:
 
 Things you can bend without touching shared code:
 
-- **Player** (`Game.player`): `move_speed`, `gravity`, `input_scale`, `controls_enabled`, `velocity`,
+- **Player** (`Game.player`): `move_speed`, `run_speed`, `gravity`, `input_scale`, `controls_enabled`, `velocity`,
   `walking_changed` signal, `facing`.
-- **Camera**: the room's `camera_size`, `camera_yaw_degrees`, `camera_pitch_degrees` exports, or
-  `Game.camera` at runtime (`follow_smoothing`, `target`, `is_point_visible()`). Set
-  `use_default_camera = false` to bring your own `Camera3D` and call `make_current()` yourself.
+- **Camera**: see the camera section below. Set `use_default_camera = false` to bring your own
+  `Camera3D` and call `make_current()` yourself.
 - **Room**: `clear_color`, `complete()` when the player solves it (the hub reads
   `Game.is_completed(id)`), `exit_to_hub()`.
 - Lights and `WorldEnvironment`: put your own in the room scene.
 
 Do not keep state in global variables. Anything that must survive leaving a room goes through `Game`
 (today that's only `completed_rooms`; ask before adding more).
+
+## Scale
+
+**1 unit = 1 meter.** The little man is 1.7 m tall, walks at 5 m/s and runs at 10 m/s.
+
+| Thing | Size |
+|---|---|
+| A room's playable ground | 300 m to 2 km across |
+| A landmark | 50 to 300 m tall, often 200 m+ away |
+| The hub ring of doors | 90 m radius, doors 40 m tall |
+| Far backdrop layers | 1 to 3 km out (camera draws to 4 km) |
+
+Fog does the work of making things feel far: start around `fog_density = 0.004` and tune per room.
+For a skyline that should stay crisp through fog (distant mountains, a huge face on the horizon), use
+a material with `disable_fog = true` on those far meshes or billboards.
+
+## Camera
+
+`Game.camera` is a `FollowCamera`: a perspective camera orbiting behind the little man.
+
+- **Player controls**: mouse or right stick orbits. Holding `focus` (Q, right mouse, left trigger)
+  turns the view toward the room's `focus_target` and zooms in a little. When the player walks
+  without touching the camera, it drifts back behind them.
+- **Framing**: it sits low with the horizon in the lower part of the frame and the little man in the
+  lower third, so the sky and landmarks dominate. `frame_tilt_degrees` controls that.
+- **Room exports** (on the room root): `camera_distance`, `camera_pitch_degrees`, `camera_fov`
+  (lower FOV makes distant things loom), `camera_far`, `focus_target`. The player spawn's facing sets
+  the starting direction, so point your default `RoomSpawn` at the landmark.
+- **Vistas**: drop a `VistaZone` (an `Area3D` with `core/vista_zone.gd` and a shape) and set
+  `look_target`. When the little man walks in, the camera pulls back `pull_back` meters, looks at the
+  target until he's a few pixels tall, then hands control back. Use them for reveals.
+- **Scripted shots**: `await Game.camera.play_shot(from, look_at, hold, blend)` for any fixed shot,
+  `Game.camera.face_toward(point)` to turn instantly.
+- **Being watched**: `Game.camera.is_point_visible(pos)` is true when a point is in the frustum and
+  on screen. It ignores walls; raycast if occlusion matters. The face boss relies on it.
 
 ## Physics layers
 
@@ -91,12 +131,12 @@ Do not keep state in global variables. Anything that must survive leaving a room
 ## Look
 
 Internal resolution is **640×360**, scaled up by whole numbers with nearest filtering, so it's chunky
-by default. The dither post-process lives in `shaders/` and attaches under `Main/PostProcess`.
+by default. At this resolution and scale, the little man at a distance is a handful of pixels: that's the point. The dither post-process lives in `shaders/` and attaches under `Main/PostProcess`.
 Rooms may pick their own palette and lighting; keep text and UI out.
 
 ## Running and checking
 
-- Play: open the project in Godot and press F5. Start in a room directly with
+- Play: open the project in Godot and press F5. The mouse is captured; Esc frees it, click to recapture. Start in a room directly with
   `godot --path . -- --room=test_room`, or set `start_room` on `main.tscn`.
 - Smoke test (run before every PR): `godot --headless --path . res://tools/smoke_test.tscn`.
   Exit code 0 means the hub, a room, and the exit back all work.

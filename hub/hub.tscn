@@ -1,7 +1,8 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://hub/hub.gd" id="1"]
 [ext_resource type="Script" path="res://core/room_spawn.gd" id="2"]
+[ext_resource type="PackedScene" path="res://props/watching_set.tscn" id="3"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_top_color = Color(0.02, 0.02, 0.06, 1)
@@ -57,3 +58,8 @@ mesh = SubResource("floor_mesh")
 [node name="center" type="Marker3D" parent="."]
 script = ExtResource("2")
 is_default = true
+
+[node name="WatchingSet" parent="." instance=ExtResource("3")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -12)
+close_on_room_complete = false
+droop_with_inks = true

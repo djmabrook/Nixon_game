@@ -17,6 +17,12 @@ signal room_completed
 ## Set by Game from the folder name. Don't edit it in the scene.
 var room_id: StringName
 
+## Inks that must be home before this room opens (e.g. the mountain needs all three).
+## Exits into a locked room do nothing, and the hub can show its door as shut.
+@export var required_inks: Array[StringName] = []
+## The ink this room gives when mended. complete() hands it to the little man.
+@export var gives_ink: StringName = &""
+
 @export_group("Camera")
 ## Set false if the room brings its own Camera3D (call make_current() yourself).
 @export var use_default_camera := true
@@ -77,6 +83,8 @@ func complete() -> void:
 	if Game.is_completed(room_id):
 		return
 	Game.mark_completed(room_id)
+	if gives_ink != &"":
+		Game.carry(gives_ink)
 	room_completed.emit()
 
 

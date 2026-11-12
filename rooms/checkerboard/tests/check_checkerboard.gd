@@ -1,5 +1,5 @@
 extends Node
-## Headless check for the checkerboard room. Exit code 0 = pass.
+## Headless check for the checker plain. Exit code 0 = pass.
 ## Run: godot --headless --path . res://rooms/checkerboard/tests/check_checkerboard.tscn
 
 const ROOM := &"checkerboard"
@@ -17,23 +17,31 @@ func _ready() -> void:
 	_check(room.room_id == ROOM, "entered room")
 	await _frames(40)
 	var p := Game.player
-	_check(p.is_on_floor() and absf(p.global_position.y) < 0.05, "little man stands on the spawn platform")
-	_check(room._balls.size() >= 3, "balls found (%d)" % room._balls.size())
-	_check(room._sky != null, "sky attached to camera")
+	_check(p.is_on_floor() and absf(p.global_position.y) < 0.05, "little man stands on the plain")
+	var biggest := 0.0
+	for b in room._balls:
+		biggest = maxf(biggest, b.radius)
+	_check(room._balls.size() >= 140, "herds spawned (%d spheres)" % room._balls.size())
+	_check(biggest >= 24.0, "a cathedral sphere exists (r = %.1f m)" % biggest)
+	_check(room.focus_target == room.moon and Game.camera.far >= 1000.0, "camera focus is the moon")
+	_check(not room.board.is_black_at(p.global_position), "spawn is on a pink tile")
 
-	# --- The tide pushes balls toward the chosen edge.
-	var ball = room._balls[0]
+	# --- The tide rolls spheres toward the moon.
+	var ball = null
+	for b in room._balls:
+		if b.radius > 0.7 and b.radius < 2.0 and not b.is_key:
+			ball = b
+			break
 	var x0: float = ball.global_position.x
-	_force_pull(Vector2(1, 0))
+	_force_pull(0.0)   # moon due +X
 	await _frames(90)
-	_check(ball.global_position.x > x0 + 1.5, "tide rolls a ball downhill (%.2f -> %.2f)" % [x0, ball.global_position.x])
+	_check(ball.global_position.x > x0 + 1.5, "tide rolls a sphere toward the moon (%.1f -> %.1f)" % [x0, ball.global_position.x])
 
 	# --- Black tiles drag the little man, pink tiles hold him.
-	var t: float = room.board.tile_size
-	var black := Vector3(t * 0.5, 0.05, t * 1.5 + t * 2.0)   # (0,3): odd -> black
-	var pink := Vector3(t * 0.5, 0.05, t * 0.5 + t * 2.0)    # (0,2): even -> pink
+	var black := Vector3(-3, 0.05, 195)
+	var pink := Vector3(-3, 0.05, 201)
 	_check(room.board.is_black_at(black) and not room.board.is_black_at(pink), "tile colour lookup")
-	_force_pull(Vector2(-1, 0))
+	_force_pull(PI)    # moon due -X
 	await _frames(30)
 	p.global_position = black
 	room._drift = Vector3.ZERO
@@ -43,72 +51,80 @@ func _ready() -> void:
 	room._drift = Vector3.ZERO
 	await _frames(20)
 	var moved_pink := absf(p.global_position.x - pink.x)
-	_check(moved_black > 0.2 and moved_pink < 0.05, "black drags (%.2f), pink holds (%.2f)" % [moved_black, moved_pink])
+	_check(moved_black > 0.3 and moved_pink < 0.05, "black drags (%.2f), pink holds (%.2f)" % [moved_black, moved_pink])
 
-	# --- A natural run of tides and a lift: nothing escapes the board.
+	# --- The fourth tide: everything lifts, giants included.
 	room._enter_phase(room.Phase.CALM, 0.1)
-	p.global_position = room.get_spawn().global_position
-	room._cycle = room.lift_every - 1   # next cycle is a lift
-	await _frames(60 * 2)
-	var floated := false
+	room._cycle = room.lift_every - 1
+	room._lifts_seen = 1   # skip the scripted vista shot in the test
+	await _frames(60 * 3)
+	var giant_up := false
 	for b in room._balls:
-		if b.global_position.y > b.radius + 0.8:
-			floated = true
-	_check(floated, "lift floats the balls")
+		if b.radius > 20.0 and b.global_position.y > b.radius + 5.0:
+			giant_up = true
+	_check(giant_up, "lift raises a cathedral sphere")
+	_check(room._moon_elev > room.moon_elevation + 0.05, "the eye looks up during the lift")
+
+	# --- A run of natural tides: giants keep out of the crater, nothing is lost.
 	await _frames(60 * 12)
-	var all_on := true
+	var crater_clear := true
+	var lost := 0
 	for b in room._balls:
-		if not room.board.is_on_board(b.global_position) or b.global_position.y < -0.5:
-			if not b.socketed:
-				all_on = false
-				print("    off board: ", b.name, " ", b.global_position)
-	_check(all_on, "balls stay on the board through the tides")
+		var flat := Vector2(b.global_position.x, b.global_position.z)
+		if b.radius > room.pushable_radius and flat.length() < room.board.crater_radius:
+			crater_clear = false
+		if b.global_position.y < -25.0:
+			lost += 1
+			print("    lost: r=%.2f at %s v=%s" % [b.radius, b.global_position, b.linear_velocity])
+	_check(crater_clear, "giants keep out of the crater")
+	_check(lost == 0, "no spheres fell through the world (%d)" % lost)
 
-	# --- Socket a small ball: the room completes.
+	# --- Only the pale sphere fits the socket.
 	room._enter_phase(room.Phase.CALM, 999.0)
-	var small = null
+	var marble = null
 	for b in room._balls:
-		if b.radius <= room.socket_fit_radius and not b.socketed:
-			small = b
-	if small == null:
-		_check(Game.is_completed(ROOM), "a ball was already socketed by the tides")
-	else:
-		small.linear_velocity = Vector3.ZERO
-		small.global_position = room.board.socket_center() + Vector3(0, 1.0, 0)
-		await _frames(90)
-		_check(small.socketed and Game.is_completed(ROOM), "ball in socket completes the room")
-	var big = null
-	for b in room._balls:
-		if b.radius > room.socket_fit_radius:
-			big = b
-	_check(big != null and not big.socketed, "big ball can't be socketed")
+		if b.radius < 0.6:
+			marble = b
+			break
+	marble.linear_velocity = Vector3.ZERO
+	marble.global_position = room.board.socket_center() + Vector3(0, 1.5, 0)
+	await _frames(60)
+	_check(not marble.socketed and not Game.is_completed(ROOM), "a marble doesn't mend the room")
+	var key = room.key_ball
+	key.linear_velocity = Vector3.ZERO
+	key.global_position = room.board.socket_center() + Vector3(0, 2.0, 0)
+	await _frames(90)
+	_check(key.socketed and Game.is_completed(ROOM), "the pale sphere in the socket mends the room")
+	await _frames(60 * 8)
+	_check(room._moon_elev < 0.0 and room._moon_open < 0.05, "the eye shuts and sets")
+	_check(room._footing > 0.9, "pink footing blooms")
+	_check(room._crater_exit != null and room._crater_exit.enabled, "an exit opens in the crater")
 
-	# --- Exit back to the hub.
-	var exit: RoomExit = room.get_node("ExitToHub")
-	p.global_position = exit.global_position
+	# --- Leave through the crater exit.
+	p.global_position = room._crater_exit.global_position + Vector3(0, 0.5, 0)
 	for i in 30:
 		await get_tree().physics_frame
 		if Game.is_travelling():
 			break
 	while Game.is_travelling():
 		await get_tree().process_frame
-	_check(Game.current_room.room_id == Game.HUB_ID, "exit returns to hub")
+	_check(Game.current_room.room_id == Game.HUB_ID, "crater exit returns to hub")
 	var door := Game.current_room.get_spawn(ROOM)
-	_check(door != null and Game.player.global_position.distance_to(door.global_position) < 0.01, "back at the checkerboard door")
+	_check(door != null and Game.player.global_position.distance_to(door.global_position) < 0.01, "back at the plain's door")
 
-	# Coming back to a solved room keeps it calm.
 	await Game.go_to(ROOM)
-	_check(Game.current_room.phase == Game.current_room.Phase.DONE, "solved room stays at peace on return")
+	_check(Game.current_room.phase == Game.current_room.Phase.DONE, "a mended plain stays at peace on return")
+	_check(Game.current_room._crater_exit != null, "the crater exit is there on return")
 
 	print("CHECKERBOARD CHECK: ", "PASS" if _failures == 0 else "FAIL (%d)" % _failures)
 	get_tree().quit(1 if _failures else 0)
 
 
-func _force_pull(dir: Vector2) -> void:
-	room._next_dir = dir
-	room._tide_dir = dir
+func _force_pull(az: float) -> void:
+	room._moon_az = az
+	room._moon_to = az
 	room._enter_phase(room.Phase.PULL, 999.0)
-	room._phase_t = 1.0
+	room._phase_t = 2.0
 
 
 func _frames(n: int) -> void:

@@ -1,29 +1,35 @@
-# Checkerboard
+# Checker Plain
 
-From the pink and black checkered-spheres still. **The broken rule is gravity.**
+**The broken rule is gravity.** A pink and black plain runs to every horizon. A red
+moon, the Watcher's eye, hangs low and circles it, and "down" always points at the moon.
 
-"Down" swings across the board like a tide. Black tiles let it take the little man;
-pink tiles hold him. The checkered balls roll wherever down is, and every fourth tide
-down lets go and the balls float. Roll a small ball into the glowing socket to finish
-the room (`complete()`). The big balls don't fit. The exit ring on the spawn platform
-always leads back to the hub.
-
-How a cycle reads without words: an edge of the board blinks red and the black tiles
-shiver (warning), a low surge plays, the edge burns and lines flow across the black
-tiles toward it (pull), then it fades (calm).
+- **The tide.** The moon comes round to a new bearing (warning: the eye opens, the horizon
+  flares, the black tiles shiver, a rising tone plays). Then it pulls. On **black tiles** the
+  little man is dragged toward the moon; **pink tiles** hold him. Wind streaks and flowing
+  lines on the black tiles show which way down is.
+- **The herds.** About 150 spheres, from marbles to cathedrals (up to about 72 m tall), migrate
+  with each tide. Big ones are capped slow, so a cathedral takes many seconds to pass, with a
+  low shake that grows as it nears. He can push anything up to 2.5 m radius.
+- **The lift.** On every fourth tide the eye looks up and everything rises at once, giants
+  included. The first lift plays a low vista shot.
+- **The goal.** The pale sphere starts beside him at the edge. Escort it about 200 m to the
+  crater at the centre, across several tides, and drop it in the socket. Anything else is
+  spat back out. Giants are kept out of the crater.
+- **The mend.** The eye shuts and sets, the tide stops for good, the spheres settle, pink
+  footing blooms under his feet, and an exit ring opens in the crater. The room stays mended
+  on later visits. The ring at the spawn always leads back to the hub.
 
 | File | What it does |
 |---|---|
-| `room.tscn` / `checkerboard.gd` | Room root, the tide loop, player drift and shoving, camera lean/shake, completion |
-| `board.gd` | Builds floor, rim, socket pit, edge strips from `tiles`, `tile_size`, `socket_tile` (editor-visible) |
-| `checker_sphere.gd` | A ball: set `radius` and colors, it builds its own mesh and collision |
-| `checker_floor.gdshader` | World-space checker, flow lines, ripple |
-| `checker_sphere.gdshader`, `dream_sky.gdshader` | Ball checker and the pink storm sky that hangs behind the camera |
+| `room.tscn` / `checkerboard.gd` | Room root: tide loop, moon, herds, drift and shoving, lift, mend |
+| `board.gd` | Builds the plain, the crater bowl and the socket from inspector numbers (visible in the editor) |
+| `checker_sphere.gd` | A sphere: set `radius` (and `is_key`), and it builds its own mesh and collision |
+| `checker_floor.gdshader` | Filtered checker to the horizon, flow lines, ripple, pink footing |
+| `checker_sphere.gdshader`, `dream_sky.gdshader` | Sphere checker; the sky with the storm band and the moon eye |
 | `room_sfx.gd` | Synthesized placeholder sounds (no audio files); swap entries in `sounds` for real samples |
 | `tests/check_checkerboard.tscn` | Headless check of this room |
 
-Tuning lives in the inspector on the room root (tide timing and strength) and on `Board`.
-Balls collide with physics layer 5 too: the invisible gate across the entry gap keeps them
-on the board without blocking the little man.
+Hooks for other threads: `TVSpot` marks where the shared watching-television prop should sit
+near the entry, and `CraterVista` is a `VistaZone` on the approach to the crater.
 
 Check: `godot --headless --path . res://rooms/checkerboard/tests/check_checkerboard.tscn`

@@ -42,6 +42,23 @@ func _ready() -> void:
 		var f := lerpf(900.0, 300.0, t / 0.5)
 		return sin(TAU * f * t) * 0.25 * _env(t, 0.5, 0.01, 0.45))
 
+	sounds[&"rumble"] = _make(7.0, func(t: float) -> float:
+		var swell := smoothstep(0.0, 6.5, t) * clampf((7.0 - t) / 0.3, 0.0, 1.0)
+		var f := 32.0 + t * 2.0
+		return (sin(TAU * f * t) * 0.6 + sin(TAU * f * 1.5 * t) * 0.25 + _noise() * 0.25) * swell * 0.8)
+	sounds[&"touchdown"] = _make(4.0, func(t: float) -> float:
+		var f := lerpf(55.0, 28.0, minf(t / 1.5, 1.0))
+		var boom := (sin(TAU * f * t) + _noise() * 0.5 * exp(-t * 6.0)) * exp(-t * 1.1)
+		var choir := 0.0
+		for n in [130.81, 196.0, 261.63, 329.63, 392.0]:
+			choir += sin(TAU * n * t + sin(TAU * 0.5 * t))
+		return boom * 0.85 + choir * 0.05 * smoothstep(0.3, 1.5, t) * exp(-maxf(t - 1.5, 0.0) * 1.2))
+	sounds[&"rise"] = _make(5.0, func(t: float) -> float:
+		var s := 0.0
+		for n in [523.25, 659.25, 783.99, 987.77, 1174.66]:
+			s += sin(TAU * n * (1.0 + t * 0.04) * t)
+		return s * 0.07 * smoothstep(0.0, 1.0, t) * clampf((5.0 - t) / 1.5, 0.0, 1.0))
+
 	for i in VOICES:
 		var p := AudioStreamPlayer.new()
 		add_child(p)

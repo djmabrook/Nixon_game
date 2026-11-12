@@ -1,41 +1,55 @@
 @tool
 extends Node3D
-## The checkerboard. Builds floor, rim, socket pit and glow strips from a few
-## numbers, so the layout can be tuned in the inspector and seen in the editor.
-## The board is centred on this node; tile edges sit on multiples of tile_size.
+## The plain. A checkerboard that runs to every horizon, with a shallow crater at
+## its centre and the socket at the crater's heart. Built from a few numbers so it
+## can be tuned in the inspector and seen in the editor.
+## The board sits at the room origin; tile edges sit on multiples of tile_size.
 
 const FLOOR_SHADER := preload("res://rooms/checkerboard/checker_floor.gdshader")
-## Physics layer 5: only the balls collide with it (keeps them off the entry path).
-const BALL_ONLY_LAYER := 1 << 4
 
-@export var tiles := 10:
-	set(v):
-		tiles = maxi(2, v - v % 2)
-		_rebuild()
-@export var tile_size := 1.5:
+## Size of one tile, in metres. The little man is 1.2 m tall.
+@export var tile_size := 6.0:
 	set(v):
 		tile_size = v
 		_rebuild()
-## Tile (column, row) counted from the -X/-Z corner that is a hole the balls can drop into.
-@export var socket_tile := Vector2i(1, 1):
+## Half-width of the solid floor. Past play_radius the plain itself draws you back,
+## so nobody ever reaches this edge.
+@export var floor_half := 300.0:
 	set(v):
-		socket_tile = v
+		floor_half = v
 		_rebuild()
-@export var rim_height := 0.45:
+## How far out the visible plain runs (it fades into the haze long before this).
+@export var visual_half := 3000.0:
 	set(v):
-		rim_height = v
+		visual_half = v
 		_rebuild()
-## Width of the gap in the +Z rim where the little man walks in.
-@export var entry_width := 3.0:
+## Radius you can wander before the plain draws you back toward the middle.
+@export var play_radius := 220.0
+@export var crater_radius := 45.0:
 	set(v):
-		entry_width = v
+		crater_radius = v
+		_rebuild()
+@export var crater_depth := 6.0:
+	set(v):
+		crater_depth = v
+		_rebuild()
+## The socket: a round hole at the crater's centre.
+@export var socket_radius := 2.4:
+	set(v):
+		socket_radius = v
+		_rebuild()
+@export var pit_depth := 3.0:
+	set(v):
+		pit_depth = v
+		_rebuild()
+## Mesh resolution of the crater, in metres.
+@export var crater_step := 1.0:
+	set(v):
+		crater_step = maxf(v, 0.1)
 		_rebuild()
 
 var floor_material: ShaderMaterial
-## Glow strip per edge: 0 = +X, 1 = -X, 2 = +Z, 3 = -Z.
-var edge_strips: Array[MeshInstance3D] = []
 var socket_light: OmniLight3D
-var socket_core: MeshInstance3D
 var socket_halo: MeshInstance3D
 
 var _built: Node3D
@@ -45,33 +59,42 @@ func _ready() -> void:
 	_rebuild()
 
 
-func half() -> float:
-	return tiles * tile_size * 0.5
-
-
+## The bottom of the socket hole (centre of the crater).
 func socket_center() -> Vector3:
-	return to_global(Vector3(
-		-half() + (socket_tile.x + 0.5) * tile_size, 0.0,
-		-half() + (socket_tile.y + 0.5) * tile_size))
+	return to_global(Vector3(0, -crater_depth, 0))
 
 
-func is_on_board(world_pos: Vector3) -> bool:
+func crater_center() -> Vector3:
+	return to_global(Vector3.ZERO)
+
+
+## Ground height at a point (ignores the socket hole).
+func height_at(world_pos: Vector3) -> float:
 	var p := to_local(world_pos)
-	return absf(p.x) < half() and absf(p.z) < half()
+	var r := Vector2(p.x, p.z).length()
+	return _bowl(r)
+
+
+func is_in_play(world_pos: Vector3) -> bool:
+	var p := to_local(world_pos)
+	return Vector2(p.x, p.z).length() < play_radius
+
+
+func is_on_floor_area(world_pos: Vector3) -> bool:
+	var p := to_local(world_pos)
+	return absf(p.x) < floor_half and absf(p.z) < floor_half
 
 
 ## True on the dark tiles: the ones the tide can grab you on.
+## Same formula as checker_floor.gdshader (world space; the board sits at the room origin).
 func is_black_at(world_pos: Vector3) -> bool:
 	var p := to_local(world_pos)
-	# Same formula as checker_floor.gdshader (world space). The board sits at the
-	# room origin and half() is a whole number of tiles, so the two agree.
 	return posmod(floori(p.x / tile_size) + floori(p.z / tile_size), 2) == 1
 
 
-func edge_index(dir: Vector2) -> int:
-	if absf(dir.x) > absf(dir.y):
-		return 0 if dir.x > 0.0 else 1
-	return 2 if dir.y > 0.0 else 3
+func _bowl(r: float) -> float:
+	var k := 1.0 - smoothstep(crater_radius * 0.15, crater_radius, r)
+	return -crater_depth * k
 
 
 func _rebuild() -> void:
@@ -79,106 +102,146 @@ func _rebuild() -> void:
 		return
 	if _built:
 		_built.free()
-	edge_strips.clear()
 	_built = Node3D.new()
 	_built.name = "Built"
 	add_child(_built, false, Node.INTERNAL_MODE_FRONT)
 
+	var cr := crater_radius
 	floor_material = ShaderMaterial.new()
 	floor_material.shader = FLOOR_SHADER
 	floor_material.set_shader_parameter(&"tile_size", tile_size)
+	floor_material.set_shader_parameter(&"hole_min", Vector2(-cr, -cr))
+	floor_material.set_shader_parameter(&"hole_max", Vector2(cr, cr))
 
-	var h := half()
-	var t := tile_size
-	var depth := 1.0
-	# Floor as four slabs around the socket hole.
-	var sx0 := -h + socket_tile.x * t
-	var sz0 := -h + socket_tile.y * t
-	_slab(Vector3(-h, -depth, -h), Vector3(h, 0, sz0), floor_material)
-	_slab(Vector3(-h, -depth, sz0 + t), Vector3(h, 0, h), floor_material)
-	_slab(Vector3(-h, -depth, sz0), Vector3(sx0, 0, sz0 + t), floor_material)
-	_slab(Vector3(sx0 + t, -depth, sz0), Vector3(h, 0, sz0 + t), floor_material)
+	# Visible plain: one huge quad with the crater square cut out by the shader.
+	var plain := MeshInstance3D.new()
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(visual_half * 2.0, visual_half * 2.0)
+	pm.material = floor_material
+	plain.mesh = pm
+	plain.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	plain.set_instance_shader_parameter(&"use_hole", 1.0)
+	_built.add_child(plain)
 
-	# Socket pit: a floor deeper down, glowing.
+	# Solid plain: four collision slabs around the crater square (no mesh).
+	var h := floor_half
+	_slab(Vector3(-h, -1, -h), Vector3(h, 0, -cr))
+	_slab(Vector3(-h, -1, cr), Vector3(h, 0, h))
+	_slab(Vector3(-h, -1, -cr), Vector3(-cr, 0, cr))
+	_slab(Vector3(cr, -1, -cr), Vector3(h, 0, cr))
+
+	# The crater: a gentle bowl, drawn and collided from the same mesh.
+	var crater_mesh := _crater_mesh()
+	var mi := MeshInstance3D.new()
+	mi.mesh = crater_mesh
+	mi.material_override = floor_material
+	_built.add_child(mi)
+	var body := StaticBody3D.new()
+	var cs := CollisionShape3D.new()
+	cs.shape = crater_mesh.create_trimesh_shape()
+	body.add_child(cs)
+	_built.add_child(body)
+
+	# The socket itself: a round pit with a glowing floor.
+	var s := socket_center()
+	var wall := MeshInstance3D.new()
+	var tube := CylinderMesh.new()
+	tube.top_radius = socket_radius
+	tube.bottom_radius = socket_radius
+	tube.height = pit_depth
+	tube.cap_top = false
+	tube.cap_bottom = false
+	tube.radial_segments = 32
+	var wall_mat := StandardMaterial3D.new()
+	wall_mat.albedo_color = Color(0.14, 0.03, 0.07)
+	wall_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	tube.material = wall_mat
+	wall.mesh = tube
+	wall.position = s + Vector3(0, -pit_depth * 0.5, 0)
+	_built.add_child(wall)
+	var pit_body := StaticBody3D.new()
+	pit_body.position = s + Vector3(0, -pit_depth - 0.25, 0)
+	var pit_shape := CollisionShape3D.new()
+	var cyl := CylinderShape3D.new()
+	cyl.radius = socket_radius + 0.5
+	cyl.height = 0.5
+	pit_shape.shape = cyl
+	pit_body.add_child(pit_shape)
+	var pit_floor := MeshInstance3D.new()
+	var disc := CylinderMesh.new()
+	disc.top_radius = socket_radius
+	disc.bottom_radius = socket_radius
+	disc.height = 0.5
 	var pit_mat := StandardMaterial3D.new()
 	pit_mat.albedo_color = Color(0.2, 0.02, 0.06)
 	pit_mat.emission_enabled = true
 	pit_mat.emission = Color(1.0, 0.3, 0.45)
-	pit_mat.emission_energy_multiplier = 2.5
-	var c := Vector3(sx0 + t * 0.5, 0, sz0 + t * 0.5)
-	socket_core = _slab(Vector3(sx0, -depth - 0.4, sz0), Vector3(sx0 + t, -depth, sz0 + t), pit_mat).get_child(1)
+	pit_mat.emission_energy_multiplier = 3.0
+	disc.material = pit_mat
+	pit_floor.mesh = disc
+	pit_body.add_child(pit_floor)
+	_built.add_child(pit_body)
+
 	socket_light = OmniLight3D.new()
-	socket_light.position = c + Vector3(0, -0.3, 0)
+	socket_light.position = s + Vector3(0, -1.0, 0)
 	socket_light.light_color = Color(1.0, 0.35, 0.5)
-	socket_light.light_energy = 1.5
-	socket_light.omni_range = 3.5
+	socket_light.light_energy = 4.0
+	socket_light.omni_range = 12.0
 	_built.add_child(socket_light)
-	# Halo on the floor around the hole, so the goal reads from across the board.
+
 	socket_halo = MeshInstance3D.new()
 	var torus := TorusMesh.new()
-	torus.inner_radius = t * 0.62
-	torus.outer_radius = t * 0.72
-	torus.rings = 48
+	torus.inner_radius = socket_radius + 0.4
+	torus.outer_radius = socket_radius + 0.7
+	torus.rings = 64
 	torus.ring_segments = 8
 	var halo_mat := StandardMaterial3D.new()
 	halo_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	halo_mat.albedo_color = Color(1.0, 0.45, 0.6)
 	torus.material = halo_mat
 	socket_halo.mesh = torus
-	socket_halo.position = c + Vector3(0, 0.02, 0)
+	socket_halo.position = s + Vector3(0, 0.05, 0)
 	socket_halo.scale = Vector3(1, 0.05, 1)
 	socket_halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_built.add_child(socket_halo)
 
-	# Rim: four walls, with an entry gap on +Z that only the balls collide with.
-	var rim_mat := StandardMaterial3D.new()
-	rim_mat.albedo_color = Color(0.08, 0.03, 0.05)
-	rim_mat.roughness = 0.6
-	var w := 0.3
-	var r := rim_height
-	_slab(Vector3(h, 0, -h - w), Vector3(h + w, r, h + w), rim_mat)        # +X
-	_slab(Vector3(-h - w, 0, -h - w), Vector3(-h, r, h + w), rim_mat)      # -X
-	_slab(Vector3(-h, 0, -h - w), Vector3(h, r, -h), rim_mat)              # -Z
-	var g := entry_width * 0.5
-	_slab(Vector3(-h, 0, h), Vector3(-g, r, h + w), rim_mat)               # +Z left
-	_slab(Vector3(g, 0, h), Vector3(h, r, h + w), rim_mat)                 # +Z right
-	var gate := _slab(Vector3(-g, 0, h), Vector3(g, r, h + w), null)
-	gate.collision_layer = BALL_ONLY_LAYER
-	gate.collision_mask = 0
 
-	# Glow strips along each edge's top. The room lights the downhill one.
-	var strip_specs := [
-		[Vector3(h + w * 0.5, r, 0), Vector3(w, 0.06, h * 2 + w * 2)],
-		[Vector3(-h - w * 0.5, r, 0), Vector3(w, 0.06, h * 2 + w * 2)],
-		[Vector3(0, r, h + w * 0.5), Vector3(h * 2, 0.06, w)],
-		[Vector3(0, r, -h - w * 0.5), Vector3(h * 2, 0.06, w)],
-	]
-	for spec in strip_specs:
-		var m := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = spec[1]
-		var sm := StandardMaterial3D.new()
-		sm.albedo_color = Color(0.25, 0.02, 0.04)
-		sm.emission_enabled = true
-		sm.emission = Color(1.0, 0.08, 0.12)
-		sm.emission_energy_multiplier = 0.0
-		bm.material = sm
-		m.mesh = bm
-		m.position = spec[0]
-		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		_built.add_child(m)
-		edge_strips.append(m)
+## A square grid over the crater; heights follow the bowl, with a round hole cut
+## at the centre for the socket (triangles inside it are dropped).
+func _crater_mesh() -> ArrayMesh:
+	var cr := crater_radius
+	var n := int(ceil(cr * 2.0 / crater_step))
+	var step := cr * 2.0 / n
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var vert := func(ix: int, iz: int) -> Vector3:
+		var x := -cr + ix * step
+		var z := -cr + iz * step
+		var r := Vector2(x, z).length()
+		# Snap the ring nearest the socket onto its rim so the hole is round.
+		if r < socket_radius + step and r > 0.0001:
+			var rim := Vector2(x, z).normalized() * socket_radius
+			if r < socket_radius:
+				return Vector3(rim.x, _bowl(socket_radius), rim.y)
+		return Vector3(x, _bowl(r), z)
+	for iz in n:
+		for ix in n:
+			var a: Vector3 = vert.call(ix, iz)
+			var b: Vector3 = vert.call(ix + 1, iz)
+			var c: Vector3 = vert.call(ix + 1, iz + 1)
+			var d: Vector3 = vert.call(ix, iz + 1)
+			for tri in [[a, b, c], [a, c, d]]:
+				var centre: Vector3 = (tri[0] + tri[1] + tri[2]) / 3.0
+				if Vector2(centre.x, centre.z).length() < socket_radius * 0.98:
+					continue
+				st.add_vertex(tri[0])
+				st.add_vertex(tri[1])
+				st.add_vertex(tri[2])
+	st.generate_normals()
+	return st.commit()
 
 
-func set_edge_glow(index: int, amount: float) -> void:
-	if index < 0 or index >= edge_strips.size():
-		return
-	var mat: StandardMaterial3D = (edge_strips[index].mesh as BoxMesh).material
-	mat.emission_energy_multiplier = amount * 4.0
-
-
-## Box from min corner to max corner, with collision on layer 1 (and a mesh if mat given).
-func _slab(a: Vector3, b: Vector3, mat: Material) -> StaticBody3D:
+func _slab(a: Vector3, b: Vector3) -> StaticBody3D:
 	var size := (b - a).abs()
 	var body := StaticBody3D.new()
 	body.position = (a + b) * 0.5
@@ -187,12 +250,5 @@ func _slab(a: Vector3, b: Vector3, mat: Material) -> StaticBody3D:
 	shape.size = size
 	cs.shape = shape
 	body.add_child(cs)
-	if mat:
-		var mi := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = size
-		bm.material = mat
-		mi.mesh = bm
-		body.add_child(mi)
 	_built.add_child(body)
 	return body

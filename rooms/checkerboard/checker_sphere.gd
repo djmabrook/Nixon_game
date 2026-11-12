@@ -20,7 +20,11 @@ const SHADER := preload("res://rooms/checkerboard/checker_sphere.gdshader")
 	set(v):
 		color_b = v
 		_build()
-## Small enough to fall into the socket? Computed from radius by the room.
+## The one the socket wants. It glows faintly so you can find it across the plain.
+@export var is_key := false:
+	set(v):
+		is_key = v
+		_build()
 var home := Vector3.ZERO
 var socketed := false
 
@@ -69,7 +73,7 @@ func set_glow(amount: float) -> void:
 func _on_body_entered(_body: Node) -> void:
 	var speed := linear_velocity.length()
 	if speed > 1.2:
-		_squash = clampf(speed / 8.0, 0.2, 1.0)
+		_squash = clampf(speed / 8.0, 0.2, 1.0) / maxf(1.0, radius * 0.5)
 		hit.emit(speed)
 
 
@@ -88,15 +92,17 @@ func _build() -> void:
 	var sm := SphereMesh.new()
 	sm.radius = radius
 	sm.height = radius * 2.0
-	sm.radial_segments = 40
-	sm.rings = 20
+	sm.radial_segments = 48 if radius < 4.0 else 96
+	sm.rings = 24 if radius < 4.0 else 48
 	sm.material = _mat
 	_mesh.mesh = sm
 	var ss := SphereShape3D.new()
 	ss.radius = radius
 	_shape.shape = ss
 	_mat.set_shader_parameter(&"color_a", color_a)
-	_mat.set_shader_parameter(&"color_b", color_b)
+	_mat.set_shader_parameter(&"color_b", Color(0.97, 0.93, 0.95) if is_key else color_b)
+	_mat.set_shader_parameter(&"glow", 0.35 if is_key else 0.0)
 	# Bigger balls get more squares, like the reference.
-	_mat.set_shader_parameter(&"columns", 8.0 if radius < 1.0 else 12.0)
-	_mat.set_shader_parameter(&"rows", 4.0 if radius < 1.0 else 6.0)
+	var cols := 8.0 if radius < 2.0 else (12.0 if radius < 12.0 else 16.0)
+	_mat.set_shader_parameter(&"columns", cols)
+	_mat.set_shader_parameter(&"rows", cols * 0.5)

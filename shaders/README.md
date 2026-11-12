@@ -3,7 +3,9 @@
 The game's pixel post-process. It takes the finished 640×360 frame, snaps it to chunky
 virtual pixels, adds an ordered (Bayer) dither and maps every pixel to a small palette.
 
-![six presets](docs/preview.png)
+![vast scale, perspective camera](docs/vast_preview.png)
+
+![iso presets](docs/preview.png)
 
 It is already wired in: `main.tscn` → `Main/PostProcess/DitherLook` (`shaders/dither_look.tscn`).
 
@@ -41,20 +43,50 @@ Duplicate a preset in `presets/` (or New Resource → `DitherLookSettings`) into
 | `contrast` / `brightness` / `saturation` | Grade before the palette is applied. |
 | `grain` | Static, world-anchored noise in the threshold. Paper/film texture, never flickers. |
 | `soft_sampling` | Averages each virtual pixel (calm). Off = crisper thin lines (grids). |
+| `haze_steps` … `haze_sky` | Depth haze as a few flat layers instead of smooth fog, spaced logarithmically from `haze_start` to `haze_end` (metres), stepping toward `haze_color`. A far mountain sits behind several clear sheets of air. |
+| `outline_*` | Ink line around things standing in front of much more distant things (a colossus against the sky, a ridge against the next ridge). Only past `outline_min_distance`, so landmarks get it and props don't. |
+
+Haze and outline run in a small depth pass inside the 3D scene, so they need Forward+ or Mobile
+(the game's renderer). On Compatibility they switch off and everything else still works.
+If a room uses haze bands, turn its smooth `Environment` fog down or off.
 
 Presets, each palette pulled from one of the reference stills:
 `lakeside_1bit`, `sand_spiral_16bit`, `y2k_red_grid`, `pink_checker`, `cloud_sky`, `purple_face_grid`.
+For the open world: `colossus_haze` (pale stone and haze, 5 haze layers, ink silhouettes),
+`colossus_dusk`. For the ending: `dawn` (every ink at once) and `paper_margin` (bone white, almost empty).
+
+## Story hooks
+
+```gdscript
+var d := get_tree().get_first_node_in_group(DitherLook.GROUP) as DitherLook
+create_tween().tween_property(d, "drain", 1.0, 2.0)   # bleed the frame to its darkest + lightest ink
+d.eyelids_to(black_look, 0.2)                          # two almond lids close onto a look
+d.eyelids_open_to(room_look, 0.3)                      # and open again
+```
+
+A palette that grows (the hub gaining inks) is just a sequence of looks with more colours:
+`DitherLook.request(get_tree(), next_look, 0.8)` dissolves between them.
 
 ## Stable in motion
 
-With `stabilize` on (default), the virtual pixel grid and the Bayer pattern are anchored to the
-world, and the ortho camera is nudged onto whole screen pixels through `h_offset`/`v_offset`
-(its transform is never touched). Panning the camera then slides the image instead of making
-the dither crawl. Measured on the demo after a 7.37 × 3.61 px pan: 0.26% of pixels change
-with it on, 17.7% with it off.
+With `stabilize` on (default) the virtual pixel grid and the Bayer pattern travel with the
+scenery instead of sitting on the screen, so the dither doesn't crawl ("shower door").
 
-## Demo
+- **Perspective (FollowCamera):** every frame DitherLook measures how far the centre of the view
+  slid across the screen and shifts the grid and pattern by that many whole pixels. Orbiting and
+  looking around carry the pattern with distant terrain, sky and fog. The pattern is never rotated
+  against the pixel grid, so there's no moire. Near ground still drifts slightly as the camera
+  travels, which reads as texture. Measured in the vast demo (0.37° orbit, upper half of frame):
+  97.4% of pixels unchanged once aligned with the scenery, versus 90.8% without.
+- **Orthographic:** the grid is anchored to the camera position and the camera is nudged onto
+  whole screen pixels via `h_offset`/`v_offset` (its transform is never touched). After a
+  7.37 × 3.61 px pan: 99.7% of pixels unchanged, versus 82% without.
 
-Open `shaders/demo/dither_demo.tscn` and press F6. Keys 1–6 switch looks with the dissolve,
-0 toggles the effect, WASD walks. Screenshots:
-`godot --path . res://shaders/demo/dither_demo.tscn -- --shots=/tmp/shots`
+## Demos
+
+- `shaders/demo/vast_demo.tscn` (F6): perspective orbit camera on a huge plain with a colossus,
+  ruins and a mountain ring. 1–5 looks, B blink, hold F to drain, S toggles stabilize,
+  0 toggles the effect, WASD walk, arrows or mouse drag orbit, Q/E zoom.
+  `-- --shots=DIR` and `-- --motion=DIR` save screenshots and the crawl test frames.
+- `shaders/demo/dither_demo.tscn` (F6): the original isometric scene with the six still-based
+  looks. 1–6 looks, 0 toggles, WASD walks.

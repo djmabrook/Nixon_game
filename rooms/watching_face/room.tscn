@@ -1,0 +1,209 @@
+[gd_scene load_steps=24 format=3]
+
+[ext_resource type="Script" path="res://rooms/watching_face/watching_face.gd" id="room"]
+[ext_resource type="Script" path="res://core/room_spawn.gd" id="spawn"]
+[ext_resource type="Script" path="res://core/room_exit.gd" id="exit"]
+[ext_resource type="PackedScene" path="res://boss/face_boss.tscn" id="face"]
+[ext_resource type="PackedScene" path="res://rooms/watching_face/pillar.tscn" id="pillar"]
+[ext_resource type="Shader" path="res://rooms/watching_face/grid.gdshader" id="grid"]
+[ext_resource type="Shader" path="res://rooms/watching_face/vignette.gdshader" id="vignette"]
+[ext_resource type="Script" path="res://rooms/watching_face/dread_synth.gd" id="synth"]
+
+[sub_resource type="Environment" id="env"]
+background_mode = 1
+background_color = Color(0.02, 0.0, 0.04, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.45, 0.3, 0.65, 1)
+ambient_light_energy = 0.6
+glow_enabled = true
+glow_intensity = 0.9
+glow_bloom = 0.15
+fog_enabled = true
+fog_light_color = Color(0.05, 0.0, 0.09, 1)
+fog_density = 0.012
+
+[sub_resource type="ShaderMaterial" id="floor_mat"]
+shader = ExtResource("grid")
+shader_parameter/half_extent = Vector2(13, 22)
+
+[sub_resource type="PlaneMesh" id="floor_mesh"]
+size = Vector2(26, 44)
+
+[sub_resource type="BoxShape3D" id="floor_shape"]
+size = Vector3(26, 1, 44)
+
+[sub_resource type="BoxShape3D" id="wall_x"]
+size = Vector3(1, 6, 46)
+
+[sub_resource type="BoxShape3D" id="wall_z"]
+size = Vector3(28, 6, 1)
+
+[sub_resource type="BoxShape3D" id="goal_shape"]
+size = Vector3(2.4, 2, 2.4)
+
+[sub_resource type="StandardMaterial3D" id="disc_mat"]
+shading_mode = 0
+albedo_color = Color(0, 0, 0, 1)
+
+[sub_resource type="CylinderMesh" id="disc_mesh"]
+material = SubResource("disc_mat")
+top_radius = 1.5
+bottom_radius = 1.5
+height = 0.04
+
+[sub_resource type="StandardMaterial3D" id="ring_mat"]
+shading_mode = 0
+albedo_color = Color(1, 0.3, 0.6, 1)
+
+[sub_resource type="TorusMesh" id="ring_mesh"]
+material = SubResource("ring_mat")
+inner_radius = 1.55
+outer_radius = 1.75
+rings = 48
+
+[sub_resource type="BoxShape3D" id="exit_shape"]
+size = Vector3(2, 2, 1.2)
+
+[sub_resource type="StandardMaterial3D" id="exit_mat"]
+shading_mode = 0
+albedo_color = Color(0.5, 0.2, 0.75, 1)
+
+[sub_resource type="BoxMesh" id="exit_mesh"]
+material = SubResource("exit_mat")
+size = Vector3(2, 0.06, 1.2)
+
+[sub_resource type="ShaderMaterial" id="vignette_mat"]
+shader = ExtResource("vignette")
+
+[node name="Room" type="Node3D"]
+script = ExtResource("room")
+camera_size = 13.0
+clear_color = Color(0.02, 0, 0.04, 1)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 10, 0)
+light_color = Color(0.95, 0.85, 1, 1)
+light_energy = 0.9
+shadow_enabled = true
+
+[node name="Floor" type="StaticBody3D" parent="."]
+
+[node name="Shape" type="CollisionShape3D" parent="Floor"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 0)
+shape = SubResource("floor_shape")
+
+[node name="Mesh" type="MeshInstance3D" parent="Floor"]
+mesh = SubResource("floor_mesh")
+material_override = SubResource("floor_mat")
+
+[node name="Bounds" type="StaticBody3D" parent="."]
+
+[node name="West" type="CollisionShape3D" parent="Bounds"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13.5, 3, 0)
+shape = SubResource("wall_x")
+
+[node name="East" type="CollisionShape3D" parent="Bounds"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 13.5, 3, 0)
+shape = SubResource("wall_x")
+
+[node name="North" type="CollisionShape3D" parent="Bounds"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, -22.5)
+shape = SubResource("wall_z")
+
+[node name="South" type="CollisionShape3D" parent="Bounds"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 22.5)
+shape = SubResource("wall_z")
+
+[node name="Pillars" type="Node3D" parent="."]
+
+[node name="Pillar1" parent="Pillars" instance=ExtResource("pillar")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6, 0, 12)
+
+[node name="Pillar2" parent="Pillars" instance=ExtResource("pillar")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0, 10)
+
+[node name="Pillar3" parent="Pillars" instance=ExtResource("pillar")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0, 5)
+
+[node name="Pillar4" parent="Pillars" instance=ExtResource("pillar")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7, 0, 2)
+
+[node name="Pillar5" parent="Pillars" instance=ExtResource("pillar")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8, 0, 0)
+
+[node name="Pillar6" parent="Pillars" instance=ExtResource("pillar")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, -3)
+
+[node name="Pillar7" parent="Pillars" instance=ExtResource("pillar")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0, -7)
+
+[node name="Pillar8" parent="Pillars" instance=ExtResource("pillar")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 0, -9)
+
+[node name="Pillar9" parent="Pillars" instance=ExtResource("pillar")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1, 0, -12)
+
+[node name="Pillar10" parent="Pillars" instance=ExtResource("pillar")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0, -14)
+
+[node name="Pillar11" parent="Pillars" instance=ExtResource("pillar")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7, 0, -15)
+
+[node name="Pillar12" parent="Pillars" instance=ExtResource("pillar")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 4, 0, -17)
+
+[node name="FaceBoss" parent="." instance=ExtResource("face")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 5, -5)
+
+[node name="Goal" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -19.5)
+collision_layer = 4
+collision_mask = 2
+monitorable = false
+
+[node name="Shape" type="CollisionShape3D" parent="Goal"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+shape = SubResource("goal_shape")
+
+[node name="Disc" type="MeshInstance3D" parent="Goal"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 0)
+mesh = SubResource("disc_mesh")
+
+[node name="Ring" type="MeshInstance3D" parent="Goal"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.06, 0)
+mesh = SubResource("ring_mesh")
+
+[node name="from_hub" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 19)
+script = ExtResource("spawn")
+is_default = true
+
+[node name="ExitToHub" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 21.3)
+script = ExtResource("exit")
+
+[node name="Shape" type="CollisionShape3D" parent="ExitToHub"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+shape = SubResource("exit_shape")
+
+[node name="Marker" type="MeshInstance3D" parent="ExitToHub"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 0)
+mesh = SubResource("exit_mesh")
+
+[node name="Screen" type="CanvasLayer" parent="."]
+layer = 10
+
+[node name="Vignette" type="ColorRect" parent="Screen"]
+material = SubResource("vignette_mat")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Synth" type="AudioStreamPlayer" parent="."]
+script = ExtResource("synth")

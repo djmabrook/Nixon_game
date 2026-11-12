@@ -37,8 +37,15 @@ enum Mode {
 		if is_inside_tree():
 			_target_lid = _lid_for_mode()
 
+## Its sound: the Watcher's empty broadcast (audio/watcher_broadcast.gd). Louder the more open
+## its eyes and the closer he is; it powers off when the lids shut. Null when muted.
+@export var broadcast_enabled := true
+## Within this many meters the set "stares": snow rises and the hum quickens.
+@export var stare_radius := 25.0
+
 ## 0 = open, 1 = shut. Animates toward the mode's target.
 var lid := 0.0
+var broadcast: WatcherBroadcast
 var _target_lid := 0.0
 var _room: Room
 
@@ -56,15 +63,39 @@ func _ready() -> void:
 		_sync_to_inks()
 	_target_lid = _lid_for_mode()
 	lid = _target_lid
+	if broadcast_enabled:
+		broadcast = WatcherBroadcast.new()
+		broadcast.unit_size = 4.0
+		add_child(broadcast)
+		broadcast.position = Vector3(0, 1.0, 0)
+		if lid >= 1.0:
+			broadcast.presence = 0.0
+			broadcast.eyes_open = false
 	_apply_lids()
 
 
 func _process(delta: float) -> void:
 	lid = move_toward(lid, _target_lid, lid_speed * delta)
 	_apply_lids()
+	_update_broadcast()
 	if mode != Mode.CLOSED and is_instance_valid(Game.player):
 		var speed := track_speed * (0.4 if mode == Mode.DROOPING else 1.0)
 		_track(Game.player.global_position + Vector3.UP * 1.2, speed * delta)
+
+
+func _update_broadcast() -> void:
+	if broadcast == null:
+		return
+	if mode == Mode.CLOSED:
+		if broadcast.eyes_open and lid > 0.9:
+			broadcast.close_eyes(0.8)
+		return
+	if not broadcast.eyes_open:
+		broadcast.open_eyes(0.6)
+	broadcast.presence = 1.0 - lid
+	if is_instance_valid(Game.player):
+		var d := global_position.distance_to(Game.player.global_position)
+		broadcast.stare = clampf(1.0 - d / stare_radius, 0.0, 1.0) * (1.0 - lid)
 
 
 func open() -> void:

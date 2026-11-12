@@ -61,6 +61,27 @@ extends Resource
 	set(v):
 		soft_sampling = v
 		emit_changed()
+## The region's one living ink. Strongly saturated, bright pixels (emissive fire, the Watcher's
+## eyes) skip the palette and snap to this colour, dithered at their edges. Off when alpha is 0.
+@export var ink: Color = Color(0, 0, 0, 0):
+	set(v):
+		ink = v
+		emit_changed()
+## How saturated (0..1) a source pixel must be to become ink.
+@export_range(0.0, 1.0, 0.01) var ink_min_saturation: float = 0.45:
+	set(v):
+		ink_min_saturation = v
+		emit_changed()
+## Only source colours within this many degrees of the ink's hue become ink (180 = any hue).
+@export_range(5.0, 180.0, 1.0) var ink_hue_range: float = 35.0:
+	set(v):
+		ink_hue_range = v
+		emit_changed()
+## How bright (0..1, brightest channel) a source pixel must be to become ink.
+@export_range(0.0, 1.0, 0.01) var ink_min_brightness: float = 0.45:
+	set(v):
+		ink_min_brightness = v
+		emit_changed()
 ## Photographic negative before quantising: light becomes dark, shadows read as solid ink.
 @export var invert: bool = false:
 	set(v):

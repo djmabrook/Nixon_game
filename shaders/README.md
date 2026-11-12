@@ -44,6 +44,7 @@ Duplicate a preset in `presets/` (or New Resource → `DitherLookSettings`) into
 | `grain` | Static, world-anchored noise in the threshold. Paper/film texture, never flickers. |
 | `soft_sampling` | Averages each virtual pixel (calm). Off = crisper thin lines (grids). |
 | `invert` | Photographic negative before the palette (light becomes dark). |
+| `ink` + `ink_min_saturation` / `ink_min_brightness` / `ink_hue_range` | The region's one living ink. Bright, saturated source pixels near the ink's hue (emissive fire, the Watcher's eyes) skip the palette and snap to `ink`, dithered at their edges. Keyed on the raw frame, so it works in 1-bit looks. `lakeside_1bit` is black + bone + ember. |
 | `haze_steps` … `haze_sky` | Depth haze as a few flat layers instead of smooth fog, spaced logarithmically from `haze_start` to `haze_end` (metres), stepping toward `haze_color`. A far mountain sits behind several clear sheets of air. |
 | `outline_*` | Ink line around things standing in front of much more distant things (a colossus against the sky, a ridge against the next ridge). Only past `outline_min_distance`, so landmarks get it and props don't. |
 
@@ -66,6 +67,13 @@ var d := get_tree().get_first_node_in_group(DitherLook.GROUP) as DitherLook
 create_tween().tween_property(d, "drain", 1.0, 2.0)   # bleed the frame to its darkest + lightest ink
 d.eyelids_to(black_look, 0.2)                          # two almond lids close onto a look
 d.eyelids_open_to(room_look, 0.3)                      # and open again
+```
+
+Borrow or swap the region's ink:
+
+```gdscript
+var ember := DitherLook.current_ink(get_tree())        # e.g. tint the Stray's arrow tip
+d.set_ink_override(Color("c8102e"), 0.5)              # flash another ink for half a second
 ```
 
 A palette that grows (the hub gaining inks) is just a sequence of looks with more colours:

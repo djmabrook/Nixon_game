@@ -23,6 +23,9 @@ uniform vec4 shape_a = vec4(4.0, 1.0, 3.0, 0.0);
 uniform vec4 grade_a = vec4(1.0, 0.0, 1.0, 0.0);
 uniform bool soft_a = true;
 uniform bool invert_a = false;
+// Living ink: rgb = colour, a = 1 when on. key: x = min saturation, y = min brightness.
+uniform vec4 ink_a = vec4(0.0);
+uniform vec3 ink_key_a = vec3(0.45, 0.45, 0.5);  // + z = hue window (0..0.5 of the colour wheel)
 
 // ---- Look B ----
 uniform sampler2D palette_b : filter_nearest, repeat_disable;
@@ -31,6 +34,9 @@ uniform vec4 shape_b = vec4(4.0, 1.0, 3.0, 0.0);
 uniform vec4 grade_b = vec4(1.0, 0.0, 1.0, 0.0);
 uniform bool soft_b = true;
 uniform bool invert_b = false;
+// Living ink: rgb = colour, a = 1 when on. key: x = min saturation, y = min brightness.
+uniform vec4 ink_b = vec4(0.0);
+uniform vec3 ink_key_b = vec3(0.45, 0.45, 0.5);  // + z = hue window (0..0.5 of the colour wheel)
 
 uniform float blend : hint_range(0.0, 1.0) = 0.0;
 // 0 = dissolve through the dither pattern, 1 = eyelids closing (top and bottom lids meet in
@@ -61,6 +67,14 @@ float hash12(vec2 p) {
 	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
 	p3 += dot(p3, p3.yzx + 33.33);
 	return fract((p3.x + p3.y) * p3.z);
+}
+
+float hue_of(vec3 c) {
+	vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+	vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+	vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+	float d = q.x - min(q.w, q.y);
+	return abs(q.z + (q.w - q.y) / (6.0 * d + 1e-10));
 }
 
 float saturation_of(vec3 c) {
@@ -96,7 +110,7 @@ vec3 sample_block(vec2 block_origin_px, float px, vec2 screen_px, bool soft) {
 	return c * 0.25;
 }
 
-vec3 run_look(vec2 frag_px, vec2 screen_px, sampler2D pal, int pal_size, vec4 shape, vec4 grd, bool soft, bool inv) {
+vec3 run_look(vec2 frag_px, vec2 screen_px, sampler2D pal, int pal_size, vec4 shape, vec4 grd, bool soft, bool inv, vec4 ink, vec3 ink_key) {
 	float px = max(1.0, shape.x);
 	vec2 world_px = frag_px + grid_offset;
 	ivec2 cell = ivec2(floor(world_px / px));
@@ -105,6 +119,22 @@ vec3 run_look(vec2 frag_px, vec2 screen_px, sampler2D pal, int pal_size, vec4 sh
 
 	vec3 raw = sample_block(origin, px, screen_px, soft);
 	vec3 src = grade(inv ? vec3(1.0) - raw : raw, grd);
+
+	// Living ink: strongly saturated, bright source pixels (fire, eyes, a beacon) skip the palette
+	// and snap to the look's one ink colour, dithered at their edges so they don't look pasted on.
+	// Keyed on the raw frame (before the grade) so a desaturated look still finds its fire.
+	if (ink.a > 0.5) {
+		float rmx = max(raw.r, max(raw.g, raw.b));
+		float rsat = saturation_of(raw);
+		float w = smoothstep(ink_key.x, ink_key.x + 0.2, rsat) * smoothstep(ink_key.y, ink_key.y + 0.2, rmx);
+		// Only colours near the ink's own hue (fire for ember, not a blue ball).
+		float dh = abs(hue_of(raw) - hue_of(ink.rgb));
+		dh = min(dh, 1.0 - dh);
+		w *= 1.0 - smoothstep(ink_key.z * 0.75, ink_key.z, dh);
+		if (w > 0.0 && bayer(cell + ivec2(3, 7), 3) < w) {
+			return ink.rgb;
+		}
+	}
 	float src_sat = saturation_of(src);
 
 	float t = bayer(dc, int(shape.z)) - 0.5;
@@ -154,9 +184,9 @@ void fragment() {
 	} else {
 		vec3 out_c;
 		if (blend <= 0.0) {
-			out_c = run_look(frag_px, screen_px, palette_a, palette_size_a, shape_a, grade_a, soft_a, invert_a);
+			out_c = run_look(frag_px, screen_px, palette_a, palette_size_a, shape_a, grade_a, soft_a, invert_a, ink_a, ink_key_a);
 		} else if (blend >= 1.0) {
-			out_c = run_look(frag_px, screen_px, palette_b, palette_size_b, shape_b, grade_b, soft_b, invert_b);
+			out_c = run_look(frag_px, screen_px, palette_b, palette_size_b, shape_b, grade_b, soft_b, invert_b, ink_b, ink_key_b);
 		} else {
 			// Dissolve through the dither pattern on the coarser of the two grids.
 			float px = max(shape_a.x, shape_b.x);
@@ -179,9 +209,9 @@ void fragment() {
 				to_b = lid + (th - 0.5) * 0.12 < open_h;
 			}
 			if (to_b) {
-				out_c = run_look(frag_px, screen_px, palette_b, palette_size_b, shape_b, grade_b, soft_b, invert_b);
+				out_c = run_look(frag_px, screen_px, palette_b, palette_size_b, shape_b, grade_b, soft_b, invert_b, ink_b, ink_key_b);
 			} else {
-				out_c = run_look(frag_px, screen_px, palette_a, palette_size_a, shape_a, grade_a, soft_a, invert_a);
+				out_c = run_look(frag_px, screen_px, palette_a, palette_size_a, shape_a, grade_a, soft_a, invert_a, ink_a, ink_key_a);
 			}
 		}
 		COLOR = vec4(out_c, 1.0);

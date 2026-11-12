@@ -74,6 +74,7 @@ var _snapped_cam: Camera3D
 var _depth_quad: MeshInstance3D
 var _depth_mat: ShaderMaterial
 var _blend := 0.0
+var _ink_override := Color(0, 0, 0, 0)
 
 
 func _init() -> void:
@@ -216,6 +217,27 @@ func transition_to(new_look: DitherLookSettings, duration: float = 0.8, wipe: in
 	_tween.tween_callback(_commit_b)
 
 
+## The current region's living ink (the look's `ink`, or a temporary override). Other code can
+## borrow it, e.g. to tint the Stray's arrow tip: `DitherLook.current_ink(get_tree())`.
+## Returns transparent black when the look has no ink.
+static func current_ink(tree: SceneTree) -> Color:
+	var node := tree.get_first_node_in_group(GROUP) as DitherLook
+	if node == null or node.look == null:
+		return Color(0, 0, 0, 0)
+	return node._ink_override if node._ink_override.a > 0.0 else node.look.ink
+
+
+## Swap the living ink for `seconds` (0 = until cleared with Color(0,0,0,0)).
+func set_ink_override(c: Color, seconds: float = 0.0) -> void:
+	_ink_override = c
+	_apply_side(&"a", look)
+	if seconds > 0.0:
+		await get_tree().create_timer(seconds).timeout
+		if _ink_override == c:
+			_ink_override = Color(0, 0, 0, 0)
+			_apply_side(&"a", look)
+
+
 ## Find the DitherLook in the tree and change its look. Does nothing if there is none.
 static func request(tree: SceneTree, new_look: DitherLookSettings, duration: float = 0.8) -> void:
 	var node := tree.get_first_node_in_group(GROUP) as DitherLook
@@ -264,6 +286,11 @@ func _apply_side(side: StringName, s: DitherLookSettings) -> void:
 	_mat.set_shader_parameter(&"grade_" + side, Vector4(s.contrast, s.brightness, s.saturation, s.grain))
 	_mat.set_shader_parameter(&"soft_" + side, s.soft_sampling)
 	_mat.set_shader_parameter(&"invert_" + side, s.invert)
+	var ink := s.ink
+	if side == &"a" and _ink_override.a > 0.0:
+		ink = _ink_override
+	_mat.set_shader_parameter(&"ink_" + side, Vector4(ink.r, ink.g, ink.b, 1.0 if ink.a > 0.0 else 0.0))
+	_mat.set_shader_parameter(&"ink_key_" + side, Vector3(s.ink_min_saturation, s.ink_min_brightness, s.ink_hue_range / 360.0))
 
 
 func _refresh_pixel_sizes() -> void:

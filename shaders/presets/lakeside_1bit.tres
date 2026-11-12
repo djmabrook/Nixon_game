@@ -5,13 +5,16 @@
 [resource]
 resource_name = "lakeside_1bit"
 script = ExtResource("1_settings")
-palette = PackedColorArray(0.03922, 0.04314, 0.03922, 1, 0.9137, 0.9255, 0.9373, 1, 0.9804, 0.251, 0.08627, 1, 1, 0.6902, 0.1804, 1)
+palette = PackedColorArray(0.05098, 0.04314, 0.03922, 1, 0.9373, 0.902, 0.8471, 1)
 virtual_height = 180
 dither_spread = 0.9
 bayer_size = 3
-accent_threshold = 0.4
+accent_threshold = 0.0
 contrast = 1.15
 brightness = 0.0
 saturation = 1.0
 grain = 0.0
 soft_sampling = true
+ink = Color(0.9412, 0.2627, 0.1176, 1)
+ink_min_saturation = 0.4
+ink_min_brightness = 0.6

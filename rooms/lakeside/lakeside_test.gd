@@ -9,6 +9,8 @@ func _ready() -> void:
 	get_tree().create_timer(300.0).timeout.connect(func():
 		print("LAKESIDE TEST: TIMEOUT")
 		get_tree().quit(2))
+	Game.save_enabled = false
+	Game.reset_story()
 	var world := Node3D.new()
 	add_child(world)
 	await Game.start(world, &"lakeside")
@@ -16,6 +18,8 @@ func _ready() -> void:
 	_check(room.room_id == &"lakeside", "entered lakeside")
 	var spawn := room.get_spawn(&"from_hub")
 	_check(Game.player.global_position.distance_to(spawn.global_position) < 0.01, "arrived at the house door")
+	var tv: WatchingSet = room.get_node("Layout/WatchingSet")
+	_check(tv.mode == WatchingSet.Mode.OPEN, "the television on the shore is watching")
 	_check(room.focus_target != null and Game.camera.focus_target == room.focus_target, "camera focus is the mountain")
 	await _frames(5)
 
@@ -81,7 +85,9 @@ func _ready() -> void:
 	_check(Game.player.controls_enabled, "control returns after the reveal")
 	_check(room._head_climb > 700.0, "the light climbed the whole mountain")
 	_check(stones[60].collision_layer == 1 and stones[400].collision_layer == 1, "the whole path is real once the brazier burns")
-	_check(room.torch_carried, "he keeps the brand")
+	_check(Game.carried == &"ember", "he carries the ember out (carry slot)")
+	_check(Game.player.carry_slot.get_child_count() > 0, "the brand rides in his carry slot")
+	_check(tv.mode == WatchingSet.Mode.CLOSED, "the television closed its eyes")
 	_check(room.mountain_exit.enabled, "mountain door opened")
 
 	Game.player.global_position = room.mountain_exit.global_position + Vector3(0, 0.2, 0.7)

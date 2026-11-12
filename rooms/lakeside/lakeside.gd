@@ -6,12 +6,14 @@ extends Room
 ## a drowned hand, a ship's hull: all of it is there and solid only inside a fire's
 ## reach, and the black water takes you everywhere else.
 ##
-## The crossing (~500 m, a few minutes) runs in four legs between islets. Carry a brand
+## The crossing (~1.1 km, a few minutes) runs in four legs between islets. Carry a brand
 ## from the campfire, relight the cold fire on each islet (it becomes the place you wake
 ## if the sea takes you), and at the far shore climb to the great brazier. Its light
 ## climbs the mountain and shows what the mountain really is: the back of the Watcher's
-## head, turned away from this place. Then the door in the rock leads home, and the little
-## man keeps the brand. The house door on the near shore also leads back to the hub.
+## head, turned away from this place. That mends the lake: it gives the ember (the brand
+## that never goes out) for his carry slot, and the watching television on the near
+## shore closes its eyes. The door in the rock leads home. The house door on the near
+## shore also leads back to the hub.
 ##
 ## Placeholder geometry: everything is built in lakeside_look.gd from primitives.
 
@@ -56,8 +58,6 @@ const HEAD_SCALE := 2.2
 
 ## Fired when the great brazier is lit (the room's goal).
 signal beacon_lit
-## Fired as the little man walks out through the mountain door holding the brand.
-signal brand_carried_out
 
 @onready var layout: Node3D = $Layout
 @onready var campfire_spot: Marker3D = $Layout/Campfire
@@ -78,7 +78,6 @@ var _stones: Array[StaticBody3D] = []  # every walkable woken thing, in path ord
 var _path_stones: Array[StaticBody3D] = []
 var _last_stone: Node = null
 var _glyph: Node3D
-var _television: Node3D
 var _head_climb := 0.0
 var _drowning := false
 var _time := 0.0
@@ -128,7 +127,6 @@ func _ready() -> void:
 
 	mountain_exit.enabled = false
 	mountain_exit.visible = false
-	mountain_exit.body_entered.connect(_on_mountain_exit_entered)
 
 
 func _on_room_entered(_spawn: StringName) -> void:
@@ -196,11 +194,6 @@ func _build_land() -> void:
 		if absf(p.x) < 5.0 or p.distance_to(Vector3(8, 0, 20)) < 6.0:
 			continue
 		Look.make_pine(lb_material, layout, p, rng.randf_range(14.0, 26.0))
-	# A television watches from the near shore. (Hook for the shared prop.)
-	_television = _make_television()
-	layout.add_child(_television)
-	_television.position = Vector3(-7, 0, 12)
-	_television.rotation.y = deg_to_rad(70)
 
 	for i in ISLETS.size():
 		var isl: Vector3 = ISLETS[i]
@@ -388,26 +381,6 @@ func _make_board() -> StaticBody3D:
 	return body
 
 
-func _make_television() -> Node3D:
-	var tv := Node3D.new()
-	tv.name = "Television"
-	var ink := Look.mat(Look.INK)
-	Look.mesh(Look.box(Vector3(1.6, 1.2, 1.1)), Look.mat(Color(0.2, 0.2, 0.2)), Vector3(0, 0.9, 0), tv)
-	Look.mesh(Look.box(Vector3(1.3, 0.95, 0.04)), Look.glow(Color(0.55, 0.55, 0.55), 1.0), Vector3(0, 0.92, 0.56), tv)
-	for x in [-0.55, 0.55]:
-		var leg := Look.mesh(Look.box(Vector3(0.06, 0.4, 0.06)), ink, Vector3(x, 0.2, 0), tv)
-		leg.rotation.z = signf(x) * 0.2
-	for x in [-0.3, 0.3]:
-		var eye := Node3D.new()
-		eye.name = "Eye"
-		eye.position = Vector3(x, 0.95, 0.6)
-		tv.add_child(eye)
-		Look.mesh(Look.sphere(0.2, 10, 0.7), Look.glow(Color(0.95, 0.95, 0.95), 1.0), Vector3.ZERO, eye)
-		var pupil := Look.mesh(Look.sphere(0.08, 8), ink, Vector3(0, 0, 0.13), eye)
-		pupil.name = "Pupil"
-	return tv
-
-
 # --- Reality ------------------------------------------------------------------------------
 
 func _lights() -> Array:
@@ -546,13 +519,17 @@ func _finish(instant: bool) -> void:
 	var f: Dictionary = fires.back()
 	mountain_exit.visible = true
 	mountain_exit.enabled = true
-	_close_television_eyes(instant)
 	if instant:
 		f.reach = beacon_reach
 		_head_climb = 800.0
 		return
 	beacon_lit.emit()
+	# Mending the lake: Room.complete() hands him the ember (gives_ink) and the region's
+	# television closes its eyes. The brand now rides in his carry slot, so the one in
+	# his hand goes out of this room's hands and into the story's.
 	complete()
+	torch_carried = false
+	torch.visible = false
 	Look.puff(self, beacon_spot.global_position + Vector3.UP * 2.5, 90, 3.0)
 	f.fire.scale = Vector3.ONE * 0.1
 	create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT) \
@@ -573,20 +550,6 @@ func _finish(instant: bool) -> void:
 		await c.finished
 	if is_instance_valid(Game.player):
 		Game.player.controls_enabled = true
-
-
-func _close_television_eyes(instant: bool) -> void:
-	for eye in _television.find_children("Eye", "", true, false):
-		if instant:
-			eye.scale.y = 0.08
-		else:
-			create_tween().tween_property(eye, "scale:y", 0.08, 1.5).set_delay(5.0)
-
-
-func _on_mountain_exit_entered(body: Node3D) -> void:
-	if body is Player and mountain_exit.enabled and torch_carried:
-		# Hook: the foundation's carry slot will take the brand into the next room.
-		brand_carried_out.emit()
 
 
 func _spin_beams(delta: float) -> void:
@@ -631,11 +594,6 @@ func _update_glyph() -> void:
 	if target != null:
 		_glyph.global_position = target + Vector3.UP * sin(_time * 4.0) * 0.08
 		_glyph.rotation.y = _time * 2.0
-	# The television's eyes follow him.
-	for pupil in _television.find_children("Pupil", "", true, false):
-		var eye := pupil.get_parent() as Node3D
-		var local := eye.to_local(pos + Vector3.UP * 0.8)
-		pupil.position = Vector3(clampf(local.x * 0.02, -0.08, 0.08), clampf(local.y * 0.02, -0.06, 0.06), 0.13)
 
 
 func _make_fade() -> void:

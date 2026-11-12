@@ -1,8 +1,9 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://rooms/lakeside/lakeside.gd" id="1"]
 [ext_resource type="Script" path="res://core/room_spawn.gd" id="2"]
 [ext_resource type="Script" path="res://core/room_exit.gd" id="3"]
+[ext_resource type="PackedScene" path="res://props/watching_set.tscn" id="4"]
 
 [sub_resource type="StandardMaterial3D" id="ground_mat"]
 albedo_color = Color(0.42, 0.42, 0.41, 1)
@@ -27,6 +28,7 @@ camera_distance = 10.0
 camera_pitch_degrees = -16.0
 camera_fov = 50.0
 camera_far = 4000.0
+gives_ink = &"ember"
 
 [node name="Layout" type="Node3D" parent="."]
 
@@ -76,3 +78,6 @@ script = ExtResource("3")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Layout/ExitMountain"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0.7)
 shape = SubResource("mountain_exit_shape")
+
+[node name="WatchingSet" parent="Layout" instance=ExtResource("4")]
+transform = Transform3D(0.34202, 0, 0.939693, 0, 1, 0, -0.939693, 0, 0.34202, -7, 0, 12)

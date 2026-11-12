@@ -18,7 +18,7 @@ func _ready() -> void:
 
 	# Every arm's rim angle maps back to its own room, and every room has a return spawn.
 	for i in ids.size():
-		var rim: Vector3 = hub.arm_point(i, 1.6)
+		var rim: Vector3 = hub.arm_point(i, hub.pit_radius)
 		_check(vortex.room_at_angle(atan2(rim.z, rim.x)) == ids[i], "rim slice %d -> %s" % [i, ids[i]])
 		_check(hub.get_spawn(ids[i]).name == String(ids[i]), "return spawn for %s" % ids[i])
 
@@ -32,14 +32,14 @@ func _ready() -> void:
 		if Game.current_room.room_id != Game.HUB_ID:
 			await Game.go_to_hub()
 		hub = Game.current_room
-		var start: Vector3 = hub.arm_point(i, 2.4)
+		var start: Vector3 = hub.arm_point(i, hub.pit_radius + 3.0)
 		Game.player.global_position = start + Vector3.UP * 0.1
 		# Walk inward along the groove until the pit takes him.
 		var target: Vector3 = hub.arm_point(i, 0.2)
 		for f in 240:
 			if Game.is_travelling() or Game.current_room != hub:
 				break
-			Game.player.global_position = Game.player.global_position.move_toward(target, 0.08)
+			Game.player.global_position = Game.player.global_position.move_toward(target, 0.12)
 			await get_tree().physics_frame
 		while Game.is_travelling() or Game.current_room == hub:
 			await get_tree().process_frame

@@ -5,29 +5,39 @@ extends StaticBody3D
 ## hub.gd asks it for heights (height_at) to stand spawns and markers on the sand.
 
 ## Radius of the sand island. Past `shore_radius` it slopes under the sea.
-@export var radius := 27.0:
+@export var radius := 1150.0:
 	set(v):
 		radius = v
 		_queue_rebuild()
-@export var shore_radius := 23.5:
+@export var shore_radius := 1000.0:
 	set(v):
 		shore_radius = v
 		_queue_rebuild()
-## How deep the funnel sinks at the center, and how wide it is.
-@export var funnel_depth := 2.2:
+## The whirlpool: a flat-bottomed pit `pit_depth` below the beach, rising to a dune
+## ridge `crest_height` above it at `crest_radius`, then easing back down to the beach
+## by `dune_foot_radius`. The ridge hides the pit until you climb it.
+@export var pit_depth := 60.0:
 	set(v):
-		funnel_depth = v
+		pit_depth = v
 		_queue_rebuild()
-@export var funnel_radius := 6.5:
+@export var crest_height := 120.0:
 	set(v):
-		funnel_radius = v
+		crest_height = v
+		_queue_rebuild()
+@export var crest_radius := 500.0:
+	set(v):
+		crest_radius = v
+		_queue_rebuild()
+@export var dune_foot_radius := 860.0:
+	set(v):
+		dune_foot_radius = v
 		_queue_rebuild()
 ## Mesh resolution. Rings are packed toward the center where the slope bends.
-@export var rings := 72:
+@export var rings := 240:
 	set(v):
 		rings = v
 		_queue_rebuild()
-@export var segments := 160:
+@export var segments := 384:
 	set(v):
 		segments = v
 		_queue_rebuild()
@@ -62,9 +72,25 @@ func _ready() -> void:
 
 ## Ground height at a distance `r` from the center (local space).
 func height_at(r: float) -> float:
-	var funnel := -funnel_depth * exp(-(r * r) / (funnel_radius * funnel_radius))
-	var shore := -0.9 * smoothstep(shore_radius - 1.0, radius, r)
-	return funnel + shore
+	var h: float
+	if r <= crest_radius:
+		# Crater: flat floor at the pit, a long curving wall up to the ridge.
+		var t := r / crest_radius
+		h = lerpf(-pit_depth, crest_height, 0.5 - 0.5 * cos(PI * pow(t, 1.15)))
+	elif r <= dune_foot_radius:
+		var t := (r - crest_radius) / (dune_foot_radius - crest_radius)
+		h = crest_height * (0.5 + 0.5 * cos(PI * t))
+	else:
+		h = 0.0
+	return h - 8.0 * smoothstep(shore_radius - 20.0, radius, r)
+
+
+## Surface normal of the smooth shape at a (local) xz position.
+func normal_at(xz: Vector2) -> Vector3:
+	var e := 0.25
+	var hx := height_at((xz + Vector2(e, 0)).length()) - height_at((xz - Vector2(e, 0)).length())
+	var hz := height_at((xz + Vector2(0, e)).length()) - height_at((xz - Vector2(0, e)).length())
+	return Vector3(-hx, 2.0 * e, -hz).normalized()
 
 
 ## Point on the smooth surface (used to build the mesh).
@@ -129,7 +155,7 @@ func rebuild() -> void:
 	_radii.append(0.0)
 	for i in range(1, rings + 1):
 		var t := float(i) / float(rings)
-		_radii.append(radius * pow(t, 1.35))
+		_radii.append(radius * pow(t, 1.25))
 	var radii := _radii
 	# Center fan.
 	for s in segments:
@@ -173,17 +199,17 @@ func _build_shore_wall() -> void:
 		if c.name.begins_with("Wall"):
 			remove_child(c)
 			c.free()
-	var count := 48
-	var wall_r := shore_radius + 0.3
+	var count := 420
+	var wall_r := shore_radius - 2.0
 	var seg_len := TAU * wall_r / count + 0.3
 	for i in count:
 		var a := TAU * (float(i) + 0.5) / count
 		var col := CollisionShape3D.new()
 		col.name = "Wall%d" % i
 		var box := BoxShape3D.new()
-		box.size = Vector3(seg_len, 4.0, 0.6)
+		box.size = Vector3(seg_len, 20.0, 2.0)
 		col.shape = box
-		var pos := Vector3(cos(a) * wall_r, 1.0, sin(a) * wall_r)
+		var pos := Vector3(cos(a) * wall_r, 2.0, sin(a) * wall_r)
 		add_child(col)
 		col.position = pos
 		col.rotation.y = -a + PI * 0.5

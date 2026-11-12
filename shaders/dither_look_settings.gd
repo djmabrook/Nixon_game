@@ -63,6 +63,59 @@ extends Resource
 		emit_changed()
 
 
+@export_group("Depth haze (3D)")
+## Number of flat haze layers between haze_start and haze_end. 0 = off.
+## Distance reads as scale: a far mountain sits behind several clear sheets of air.
+@export_range(0, 12, 1) var haze_steps: int = 0:
+	set(v):
+		haze_steps = v
+		emit_changed()
+@export var haze_color: Color = Color("dde1e0"):
+	set(v):
+		haze_color = v
+		emit_changed()
+## Metres. Layers are spaced logarithmically between start and end.
+@export_range(1.0, 500.0, 0.5, "or_greater") var haze_start: float = 25.0:
+	set(v):
+		haze_start = v
+		emit_changed()
+@export_range(10.0, 20000.0, 1.0, "or_greater") var haze_end: float = 1600.0:
+	set(v):
+		haze_end = v
+		emit_changed()
+## How far the last layer goes toward haze_color. Below 1 keeps far silhouettes visible.
+@export_range(0.0, 1.0, 0.01) var haze_amount: float = 0.85:
+	set(v):
+		haze_amount = v
+		emit_changed()
+## Band the sky too (off: the sky stays as rendered and far ridges sit against it).
+@export var haze_sky: bool = false:
+	set(v):
+		haze_sky = v
+		emit_changed()
+
+@export_group("Silhouette outline (3D)")
+## Ink line where something stands in front of much more distant things. 0 = off.
+@export_range(0.0, 1.0, 0.01) var outline_strength: float = 0.0:
+	set(v):
+		outline_strength = v
+		emit_changed()
+@export var outline_color: Color = Color("17171a"):
+	set(v):
+		outline_color = v
+		emit_changed()
+## Only things at least this far away (metres) get the line, so landmarks do and props don't.
+@export_range(0.0, 2000.0, 1.0, "or_greater") var outline_min_distance: float = 40.0:
+	set(v):
+		outline_min_distance = v
+		emit_changed()
+## How much further the background must be to count as an edge (1.6 = 60% further).
+@export_range(1.05, 5.0, 0.01) var outline_depth_ratio: float = 1.6:
+	set(v):
+		outline_depth_ratio = v
+		emit_changed()
+
+
 func make_palette_texture() -> ImageTexture:
 	var n := clampi(palette.size(), 1, 32)
 	var img := Image.create(32, 1, false, Image.FORMAT_RGBA8)

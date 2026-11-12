@@ -16,6 +16,7 @@ extends ColorRect
 
 const GROUP := &"dither_look"
 const SHADER := preload("res://shaders/dither_look.gdshader")
+const DEPTH_SHADER := preload("res://shaders/dither_depth.gdshader")
 
 ## The look used in rooms that don't set their own, and at startup.
 @export var default_look: DitherLookSettings:
@@ -41,14 +42,25 @@ const SHADER := preload("res://shaders/dither_look.gdshader")
 		enabled = v
 		if _mat:
 			_mat.set_shader_parameter(&"enabled", v)
+		_update_depth_pass()
+
+## Story hook: 0..1 bleeds the frame down to the current palette's darkest and lightest inks
+## (e.g. while the Watcher stares). Tween it freely.
+@export_range(0.0, 1.0, 0.01) var drain: float = 0.0:
+	set(v):
+		drain = v
+		if _mat:
+			_mat.set_shader_parameter(&"drain", v)
 
 ## Follow Game.room_changed and apply each room's `dither_look` (or `default_look`).
 @export var follow_rooms: bool = true
 
-## Keep the image rock steady while an orthographic camera moves:
-## the virtual pixel grid and the dither pattern are anchored to the world, and the camera is
-## nudged (via h_offset / v_offset, never its transform) onto whole screen pixels so the 3D
-## render itself doesn't swim. Turn off only to compare.
+## Keep the dither steady while the camera moves. Turn off only to compare.
+## Orthographic: the pixel grid and pattern are anchored to the world and the camera is nudged
+## (h_offset / v_offset, never its transform) onto whole screen pixels.
+## Perspective: the grid and pattern follow the turn of the view, so orbiting and looking around
+## carry them with the scenery (distant terrain, sky and fog stay put; near ground drifts a
+## little as the camera travels).
 @export var stabilize: bool = true:
 	set(v):
 		stabilize = v
@@ -59,6 +71,9 @@ var _mat: ShaderMaterial
 var _side_b: DitherLookSettings
 var _tween: Tween
 var _snapped_cam: Camera3D
+var _depth_quad: MeshInstance3D
+var _depth_mat: ShaderMaterial
+var _blend := 0.0
 
 
 func _init() -> void:
@@ -74,6 +89,8 @@ func _init() -> void:
 
 func _ready() -> void:
 	add_to_group(GROUP)
+	if not Engine.is_editor_hint():
+		_make_depth_pass()
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	get_viewport().size_changed.connect(_refresh_pixel_sizes)
 	if look == null:
@@ -89,7 +106,44 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if Engine.is_editor_hint():
 		return
-	_mat.set_shader_parameter(&"grid_offset", _stabilize_camera() if stabilize else Vector2.ZERO)
+	var offset := Vector2.ZERO
+	if stabilize:
+		var cam := get_viewport().get_camera_3d()
+		if cam and cam.projection == Camera3D.PROJECTION_PERSPECTIVE:
+			_release_camera()
+			offset = _track_perspective(cam)
+		else:
+			offset = _stabilize_camera()
+	if _depth_mat:
+		var c3 := get_viewport().get_camera_3d()
+		if c3:
+			_depth_mat.set_shader_parameter(&"far_clip", c3.far)
+	_mat.set_shader_parameter(&"grid_offset", offset)
+
+
+var _persp_cam: Camera3D
+var _persp_fwd := Vector3.ZERO
+var _persp_shift := Vector2.ZERO
+
+
+## Perspective: measure how far the centre of the view slid across the screen since last frame
+## (where last frame's view direction lands now) and accumulate it. Shifting the grid and the
+## pattern by that whole-pixel amount makes them turn with the world, without rotating the
+## pattern against the pixel grid (which would cause moire).
+func _track_perspective(cam: Camera3D) -> Vector2:
+	var b := cam.global_transform.basis.orthonormalized()
+	var fwd := -b.z
+	if cam != _persp_cam:
+		_persp_cam = cam
+		_persp_fwd = fwd
+	var vp := get_viewport().get_visible_rect().size
+	var t := tan(deg_to_rad(cam.fov) * 0.5)
+	var focal := (vp.y * 0.5) / t if cam.keep_aspect == Camera3D.KEEP_HEIGHT else (vp.x * 0.5) / t
+	var v := b.inverse() * _persp_fwd
+	if v.z < -0.2:  # a jump of more than ~78 degrees in one frame is a cut: start fresh
+		_persp_shift -= Vector2(v.x / -v.z, -v.y / -v.z) * focal
+	_persp_fwd = fwd
+	return _persp_shift.round()
 
 
 ## Snaps the active ortho camera to whole screen pixels and returns its position in screen
@@ -126,8 +180,21 @@ func _exit_tree() -> void:
 	_release_camera()
 
 
+## Close to another look with two eyelids (top and bottom, almond shaped, dithered lash line).
+## For a television or the Watcher shutting its eyes; pass a near-black look to blink out.
+func eyelids_to(new_look: DitherLookSettings, duration: float = 0.6) -> void:
+	transition_to(new_look, duration, 1)
+
+
+## The reverse: lids open from the middle row onto the new look.
+func eyelids_open_to(new_look: DitherLookSettings, duration: float = 0.6) -> void:
+	transition_to(new_look, duration, 2)
+
+
 ## Dissolve to another look through the dither pattern. duration 0 = instant.
-func transition_to(new_look: DitherLookSettings, duration: float = 0.8) -> void:
+## wipe: 0 = dissolve, 1 = eyelids closing, 2 = eyelids opening.
+func transition_to(new_look: DitherLookSettings, duration: float = 0.8, wipe: int = 0) -> void:
+	_mat.set_shader_parameter(&"wipe_mode", wipe)
 	if _tween:
 		_tween.kill()
 		_tween = null
@@ -169,12 +236,15 @@ func _commit_b() -> void:
 
 
 func _set_blend(v: float) -> void:
+	_blend = v
 	if _mat:
 		_mat.set_shader_parameter(&"blend", v)
+	_update_depth_pass()
 
 
 func _on_look_changed() -> void:
 	_apply_side(&"a", look)
+	_update_depth_pass()
 
 
 ## Real pixels per virtual pixel. Whole numbers only, so virtual pixels stay square.
@@ -199,3 +269,42 @@ func _refresh_pixel_sizes() -> void:
 	_apply_side(&"a", look)
 	if _side_b:
 		_apply_side(&"b", _side_b)
+
+
+# ---------------------------------------------------------------- depth pass (haze bands, outlines)
+
+func _make_depth_pass() -> void:
+	_depth_mat = ShaderMaterial.new()
+	_depth_mat.shader = DEPTH_SHADER
+	_depth_mat.render_priority = Material.RENDER_PRIORITY_MAX
+	var quad := QuadMesh.new()
+	_depth_quad = MeshInstance3D.new()
+	_depth_quad.name = "DepthPass"
+	_depth_quad.mesh = quad
+	_depth_quad.material_override = _depth_mat
+	_depth_quad.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_depth_quad.custom_aabb = AABB(Vector3.ONE * -1e6, Vector3.ONE * 2e6)
+	_depth_quad.extra_cull_margin = 16384.0
+	_depth_quad.visible = false
+	add_child(_depth_quad, false, Node.INTERNAL_MODE_BACK)
+	_update_depth_pass()
+
+
+func _update_depth_pass() -> void:
+	if not _depth_mat or not look:
+		return
+	var a := look
+	var b := _side_b if _side_b else look
+	var t := _blend if _side_b else 0.0
+	var steps := a.haze_steps if t < 0.5 else b.haze_steps
+	var amount := lerpf(a.haze_amount if a.haze_steps > 0 else 0.0, b.haze_amount if b.haze_steps > 0 else 0.0, t)
+	var ink := lerpf(a.outline_strength, b.outline_strength, t)
+	# The Compatibility renderer tone-maps 3D materials inline, which breaks this pass's
+	# read-back; it needs Forward+ or Mobile (the game uses Forward+).
+	var supported := RenderingServer.get_current_rendering_method() != "gl_compatibility"
+	_depth_quad.visible = supported and enabled and ((steps > 0 and amount > 0.0) or ink > 0.0)
+	_depth_mat.set_shader_parameter(&"haze", Vector4(steps, lerpf(a.haze_start, b.haze_start, t), lerpf(a.haze_end, b.haze_end, t), amount))
+	_depth_mat.set_shader_parameter(&"haze_color", a.haze_color.lerp(b.haze_color, t))
+	_depth_mat.set_shader_parameter(&"haze_sky", a.haze_sky if t < 0.5 else b.haze_sky)
+	_depth_mat.set_shader_parameter(&"outline", Vector4(ink, maxf(1.0, _pixel_size_for(a if t < 0.5 else b)), lerpf(a.outline_min_distance, b.outline_min_distance, t), lerpf(a.outline_depth_ratio, b.outline_depth_ratio, t)))
+	_depth_mat.set_shader_parameter(&"outline_color", a.outline_color.lerp(b.outline_color, t))

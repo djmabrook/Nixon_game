@@ -20,15 +20,41 @@ signal walking_changed(is_walking: bool)
 ## Multiplier on the input vector. A room can set it to Vector2(-1, -1) to invert controls.
 @export var input_scale := Vector2.ONE
 
+## Seconds the shadow trails the body. Follows Game.shadow_lag() unless a room overrides it.
+@export var shadow_lag := 0.5
+## When true, shadow_lag tracks Game.shadow_lag() as inks come home.
+@export var shadow_lag_from_story := true
+
 ## Last non-zero walk direction on the ground plane (unit vector, world space).
 var facing := Vector3.FORWARD
 var is_walking := false
 
 @onready var visual: Node3D = $Visual
+## Where a carried ink's object hangs. Its child is replaced when Game.carried changes.
+@onready var carry_slot: Node3D = $Visual/CarrySlot
+## A shadows-only copy of the body that replays where the body was `shadow_lag` seconds ago.
+@onready var shadow_caster: Node3D = $ShadowCaster
+
+var _history: Array = []  # [time, Transform3D of body, visual yaw]
 
 
 func _ready() -> void:
 	add_to_group(&"player")
+	shadow_caster.top_level = true
+	if shadow_lag_from_story:
+		shadow_lag = Game.shadow_lag()
+	Game.carried_changed.connect(_refresh_carry)
+	Game.ink_home.connect(_on_ink_home)
+	_refresh_carry(Game.carried)
+
+
+func _on_ink_home(_ink: StringName) -> void:
+	if shadow_lag_from_story:
+		shadow_lag = Game.shadow_lag()
+
+
+func _process(_delta: float) -> void:
+	_update_shadow()
 
 
 func _physics_process(delta: float) -> void:
@@ -54,6 +80,48 @@ func _physics_process(delta: float) -> void:
 	if walking != is_walking:
 		is_walking = walking
 		walking_changed.emit(walking)
+
+
+## What the little man is holding (&"" = nothing). Same as Game.carried.
+func carried_ink() -> StringName:
+	return Game.carried
+
+
+## Shows the carried ink's object. Uses res://props/carry/<ink>.tscn if it exists,
+## otherwise a small coloured placeholder. The sprites/models thread fills props/carry/.
+func _refresh_carry(ink: StringName) -> void:
+	for c in carry_slot.get_children():
+		c.queue_free()
+	if ink == &"":
+		return
+	var path := "res://props/carry/%s.tscn" % ink
+	if ResourceLoader.exists(path):
+		carry_slot.add_child((load(path) as PackedScene).instantiate())
+		return
+	var mesh := MeshInstance3D.new()
+	var m := SphereMesh.new()
+	m.radius = 0.12
+	m.height = 0.24
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = {&"ember": Color(1, 0.35, 0.1), &"salmon": Color(1, 0.55, 0.6), &"crimson": Color(0.05, 0.02, 0.02)}.get(ink, Color.WHITE)
+	if ink == &"ember":
+		mat.emission_enabled = true
+		mat.emission = mat.albedo_color
+		mat.emission_energy_multiplier = 3.0
+	m.material = mat
+	mesh.mesh = m
+	carry_slot.add_child(mesh)
+
+
+func _update_shadow() -> void:
+	var now := Time.get_ticks_msec() / 1000.0
+	_history.append([now, global_transform, visual.rotation.y])
+	var cutoff := now - shadow_lag
+	while _history.size() > 1 and _history[1][0] <= cutoff:
+		_history.pop_front()
+	var past: Array = _history[0]
+	var xf: Transform3D = past[1]
+	shadow_caster.global_transform = xf.rotated_local(Vector3.UP, past[2])
 
 
 ## Turn instantly to face a world direction (flattened onto the ground).

@@ -73,7 +73,6 @@ var _arm_reach: Array[float] = []
 var _open: Array[bool] = []
 var _stakes: Array = []
 var _room_inks := {}   # room id -> the ink it gives
-var _broadcast: Node
 var _was_sliding := false
 
 @onready var _sand: StaticBody3D = $SandVortex
@@ -149,7 +148,8 @@ func _ready() -> void:
 
 
 ## Sound (audio/AUDIO.md). Added only when the sound system is in the project, so the hub
-## works with or without it: the night bed and sand footsteps, and the television's broadcast.
+## works with or without it: the night bed and sand footsteps. The television carries its
+## own broadcast, which fades as it droops with the inks.
 func _add_audio() -> void:
 	if ResourceLoader.exists("res://audio/room_audio.gd"):
 		var ra: Node = load("res://audio/room_audio.gd").new()
@@ -160,11 +160,6 @@ func _add_audio() -> void:
 		ra.set("near_room_size", 0.8)
 		ra.set("far_room_size", 1.0)
 		add_child(ra)
-	if ResourceLoader.exists("res://audio/watcher_broadcast.gd"):
-		var wb: Node = load("res://audio/watcher_broadcast.gd").new()
-		wb.name = "Broadcast"
-		$WatchingSet.add_child(wb)
-		_broadcast = wb
 
 
 ## The Sound autoload, if the project has one.
@@ -457,12 +452,6 @@ func _process(delta: float) -> void:
 		var k := 1.0 - exp(-1.2 * delta)
 		cam.distance = lerpf(cam.distance, _distance_for(r) * (1.0 + 0.6 * _sliding), k)
 		cam.set_base_fov(lerpf(cam.fov, lerpf(_fov_for(r), slide_fov, _sliding), k))
-	# The television's broadcast: louder as he nears it, lower as its eyes droop.
-	if _broadcast:
-		var near := 1.0 - smoothstep(15.0, 260.0, p.global_position.distance_to($WatchingSet.global_position))
-		var awake := 1.0 - Game.ink_progress()
-		_broadcast.set("presence", near * awake)
-		_broadcast.set("stare", 0.35 * awake * near)
 	# The sand rumbles when a groove takes you as a slide.
 	var sliding := _sliding > 0.5
 	if sliding and not _was_sliding and sound():

@@ -1,41 +1,37 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://rooms/lakeside/lakeside.gd" id="1"]
 [ext_resource type="Script" path="res://core/room_spawn.gd" id="2"]
 [ext_resource type="Script" path="res://core/room_exit.gd" id="3"]
 
 [sub_resource type="StandardMaterial3D" id="ground_mat"]
-albedo_color = Color(0.5, 0.5, 0.49, 1)
+albedo_color = Color(0.42, 0.42, 0.41, 1)
 roughness = 1.0
 
 [sub_resource type="BoxShape3D" id="near_shape"]
-size = Vector3(14, 1, 8)
+size = Vector3(120, 1, 40)
 
 [sub_resource type="BoxMesh" id="near_mesh"]
 material = SubResource("ground_mat")
-size = Vector3(14, 1, 8)
-
-[sub_resource type="BoxShape3D" id="far_shape"]
-size = Vector3(12, 1, 7.7)
-
-[sub_resource type="BoxMesh" id="far_mesh"]
-material = SubResource("ground_mat")
-size = Vector3(12, 1, 7.7)
+size = Vector3(120, 1, 40)
 
 [sub_resource type="BoxShape3D" id="house_exit_shape"]
-size = Vector3(1.2, 2, 0.5)
+size = Vector3(1.4, 2.4, 0.6)
 
 [sub_resource type="BoxShape3D" id="mountain_exit_shape"]
-size = Vector3(1.4, 2, 0.8)
+size = Vector3(3.6, 3, 1.2)
 
 [node name="Room" type="Node3D"]
 script = ExtResource("1")
-camera_size = 11.0
+camera_distance = 10.0
+camera_pitch_degrees = -16.0
+camera_fov = 50.0
+camera_far = 4000.0
 
 [node name="Layout" type="Node3D" parent="."]
 
 [node name="NearShore" type="StaticBody3D" parent="Layout"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, 20)
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Layout/NearShore"]
 shape = SubResource("near_shape")
@@ -43,42 +39,40 @@ shape = SubResource("near_shape")
 [node name="Mesh" type="MeshInstance3D" parent="Layout/NearShore"]
 mesh = SubResource("near_mesh")
 
-[node name="FarShore" type="StaticBody3D" parent="Layout"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.5, -15.15)
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="Layout/FarShore"]
-shape = SubResource("far_shape")
-
-[node name="Mesh" type="MeshInstance3D" parent="Layout/FarShore"]
-mesh = SubResource("far_mesh")
+[node name="Landmark" type="Marker3D" parent="Layout"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 300, -1750)
 
 [node name="Campfire" type="Marker3D" parent="Layout"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2, 0, 4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0, 5)
 
 [node name="Beacon" type="Marker3D" parent="Layout"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -13.6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 14, -1137.4)
 
 [node name="from_hub" type="Marker3D" parent="Layout"]
-transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 3.5, 0, 9.3)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11.6, 0, 18.6)
 script = ExtResource("2")
 is_default = true
 
 [node name="shore" type="Marker3D" parent="Layout"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.6, 0, 3.1)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0, 3.4)
+script = ExtResource("2")
+
+[node name="plateau" type="Marker3D" parent="Layout"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 14, -1131)
 script = ExtResource("2")
 
 [node name="ExitToHub" type="Area3D" parent="Layout"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.5, 0, 8.35)
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 10.4, 0, 20)
 script = ExtResource("3")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Layout/ExitToHub"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
 shape = SubResource("house_exit_shape")
 
 [node name="ExitMountain" type="Area3D" parent="Layout"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -18.4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 14, -1148.8)
 script = ExtResource("3")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Layout/ExitMountain"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0.3)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0.7)
 shape = SubResource("mountain_exit_shape")

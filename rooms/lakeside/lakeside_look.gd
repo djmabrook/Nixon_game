@@ -1,20 +1,30 @@
 extends RefCounted
-## Builds the lakeside's placeholder geometry and effects from primitives.
-## Palette: pure greys and black. Fire is the only color (deep red to ember orange).
-## Swap any make_*() for a Meshy GLB later without touching the rule logic.
+## Builds the lakeside's placeholder world from primitives. Palette: greys and black;
+## fire is the only color. Anything made with lb() exists only in firelight (see
+## lightbound.gdshader). Every make_*/build_* can later be swapped for a Meshy GLB
+## without touching the rule logic in lakeside.gd.
+##
+## Scale: the little man is 1.2 m tall. The lake is ~115 m across, the pines reach 26 m,
+## the drowned head is 24 m wide, the watchers stand 40 m out of the water, and the
+## mountain is 190 m high.
 
 const FireScript := preload("res://rooms/lakeside/fire.gd")
 const WaterShader := preload("res://rooms/lakeside/water.gdshader")
+const LightboundShader := preload("res://rooms/lakeside/lightbound.gdshader")
 
 const INK := Color(0.03, 0.03, 0.035)
 const STONE := Color(0.62, 0.62, 0.6)
 const BONE := Color(0.86, 0.86, 0.84)
 const ASH := Color(0.35, 0.35, 0.34)
+const SHORE := Color(0.42, 0.42, 0.41)
+const ROCK := Color(0.16, 0.16, 0.17)
 const FIRE_DEEP := Color(0.55, 0.02, 0.02)
 const FIRE_RED := Color(1.0, 0.12, 0.05)
 const FIRE_CORE := Color(1.0, 0.55, 0.25)
 const FIRE_LIGHT := Color(1.0, 0.32, 0.18)
 
+
+# --- Helpers ----------------------------------------------------------------------------
 
 static func mat(c: Color, rough := 1.0) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
@@ -43,6 +53,42 @@ static func mesh(m: Mesh, material: Material, pos := Vector3.ZERO, parent: Node3
 	return mi
 
 
+## The lightbound materials of one room: one ShaderMaterial per look, all fed the same fires.
+class Lightbound extends RefCounted:
+	var shader: Shader
+	var mats := {}
+
+	func _init(fogless: bool) -> void:
+		if fogless:
+			shader = Shader.new()
+			shader.code = LightboundShader.code.replace("shader_type spatial;", "shader_type spatial;\nrender_mode fog_disabled;")
+		else:
+			shader = LightboundShader
+
+	func get_material(tint: Color, sink: float, climb: float, invert: float) -> ShaderMaterial:
+		var key := [tint, sink, climb, invert]
+		if not mats.has(key):
+			var m := ShaderMaterial.new()
+			m.shader = shader
+			m.set_shader_parameter(&"tint", tint)
+			m.set_shader_parameter(&"sink", sink)
+			m.set_shader_parameter(&"climb", climb)
+			m.set_shader_parameter(&"invert", invert)
+			mats[key] = m
+		return mats[key]
+
+	func set_all(param: StringName, value: Variant) -> void:
+		for m: ShaderMaterial in mats.values():
+			m.set_shader_parameter(param, value)
+
+
+## A mesh that exists only in firelight. `sink` > 0 reveals it whole and raises it out
+## of the lake (stepping stones); 0 dissolves it fragment by fragment (giants).
+## `climb` makes it follow the light climbing the mountain instead; `invert` flips that.
+static func lb(set: Lightbound, m: Mesh, tint: Color, pos: Vector3, parent: Node3D, sink := 0.0, climb := 0.0, invert := 0.0) -> MeshInstance3D:
+	return mesh(m, set.get_material(tint, sink, climb, invert), pos, parent)
+
+
 static func box(size: Vector3) -> BoxMesh:
 	var b := BoxMesh.new()
 	b.size = size
@@ -59,21 +105,56 @@ static func cone(radius: float, height: float, sides := 6) -> CylinderMesh:
 	return c
 
 
-## Every material on a light-bound prop, made unique so each fades on its own.
-static func collect_materials(root: Node) -> Array:
-	var out := []
-	for n in [root] + root.find_children("*", "MeshInstance3D", true, false):
-		if n is MeshInstance3D and n.material_override is BaseMaterial3D:
-			n.material_override = n.material_override.duplicate()
-			out.append(n.material_override)
-	return out
+static func cyl(radius: float, height: float, sides := 12, top := -1.0) -> CylinderMesh:
+	var c := CylinderMesh.new()
+	c.top_radius = radius if top < 0.0 else top
+	c.bottom_radius = radius
+	c.height = height
+	c.radial_segments = sides
+	c.rings = 1
+	return c
 
 
-# --- The world --------------------------------------------------------------------------
+static func sphere(radius: float, segments := 12, squash := 1.0) -> SphereMesh:
+	var s := SphereMesh.new()
+	s.radius = radius
+	s.height = radius * 2.0 * squash
+	s.radial_segments = segments
+	s.rings = maxi(segments / 2, 3)
+	return s
 
-static func dress(room: Node3D) -> void:
-	var layout: Node3D = room.get_node("Layout")
 
+static func capsule(radius: float, height: float) -> CapsuleMesh:
+	var c := CapsuleMesh.new()
+	c.radius = radius
+	c.height = height
+	c.radial_segments = 10
+	c.rings = 4
+	return c
+
+
+static func solid(parent: Node3D, node_name: String, shape: Shape3D, xform: Transform3D) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	body.name = node_name
+	body.transform = xform
+	var cs := CollisionShape3D.new()
+	cs.shape = shape
+	body.add_child(cs)
+	parent.add_child(body)
+	return body
+
+
+static func box_body(parent: Node3D, node_name: String, size: Vector3, xform: Transform3D, color: Color) -> StaticBody3D:
+	var bs := BoxShape3D.new()
+	bs.size = size
+	var body := solid(parent, node_name, bs, xform)
+	mesh(box(size), mat(color), Vector3.ZERO, body)
+	return body
+
+
+# --- Sky, light, water ------------------------------------------------------------------
+
+static func dress_night(room: Node3D) -> void:
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
 	env.background_color = Color.BLACK
@@ -85,6 +166,10 @@ static func dress(room: Node3D) -> void:
 	env.glow_intensity = 0.7
 	env.glow_bloom = 0.04
 	env.glow_hdr_threshold = 0.9
+	# Black fog: the sea has no far shore, things simply stop.
+	env.fog_enabled = true
+	env.fog_light_color = Color(0, 0, 0)
+	env.fog_density = 0.0022
 	var we := WorldEnvironment.new()
 	we.name = "Night"
 	we.environment = env
@@ -93,147 +178,323 @@ static func dress(room: Node3D) -> void:
 	var moon := DirectionalLight3D.new()
 	moon.name = "Moon"
 	moon.light_color = Color(1, 1, 1)
-	moon.light_energy = 0.14
+	moon.light_energy = 0.16
 	moon.shadow_enabled = true
+	moon.directional_shadow_max_distance = 300.0
 	moon.rotation_degrees = Vector3(-50, 20, 0)
 	room.add_child(moon)
 
-	# The lake: one black mirror under everything.
+
+static func make_lake(parent: Node3D) -> MeshInstance3D:
 	var water := PlaneMesh.new()
-	water.size = Vector2(80, 80)
+	water.size = Vector2(5000, 5000)
 	var wm := ShaderMaterial.new()
 	wm.shader = WaterShader
-	mesh(water, wm, Vector3(0, -0.32, -4), layout).name = "Lake"
-
-	# The moon lives in the lake, not the sky. The dead-end stones lead to it.
-	var disc := CylinderMesh.new()
-	disc.top_radius = 0.55
-	disc.bottom_radius = 0.55
-	disc.height = 0.01
-	disc.radial_segments = 24
-	var moon_mat := glow(Color(0.95, 0.95, 0.92), 1.0)
-	moon_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	moon_mat.albedo_color = Color(0.8, 0.8, 0.78, 0.55)
-	mesh(disc, moon_mat, Vector3(-4.9, -0.3, -2.6), layout).name = "MoonInLake"
-
-	_foam(layout, 2.0, 7.0)
-	_foam(layout, -11.3, 6.0)
-	_house(layout)
-	_mountains(layout)
-	_shore_details(layout)
-	_doorway(room.get_node("Layout/ExitMountain"))
+	var lake := mesh(water, wm, Vector3(0, -0.32, -800), parent)
+	lake.name = "Lake"
+	lake.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return lake
 
 
 ## A dashed white line where land meets water, so the shore reads against the black lake.
-static func _foam(layout: Node3D, z: float, half: float) -> void:
+static func foam_line(parent: Node3D, from: Vector3, to: Vector3, seed_value: int) -> void:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = int(z * 10.0)
+	rng.seed = seed_value
 	var m := glow(Color(0.75, 0.75, 0.72), 1.0)
-	var x := -half
-	while x < half:
-		var w := rng.randf_range(0.3, 1.2)
-		mesh(box(Vector3(minf(w, half - x), 0.02, 0.06)), m,
-			Vector3(x + w * 0.5, -0.29, z + rng.randf_range(-0.12, 0.04) * signf(z)), layout)
-		x += w + rng.randf_range(0.15, 0.5)
+	var length := from.distance_to(to)
+	var dir := (to - from).normalized()
+	var side := dir.cross(Vector3.UP)
+	var s := 0.0
+	while s < length:
+		var w := minf(rng.randf_range(0.4, 2.2), length - s)
+		var seg := mesh(box(Vector3(0.07, 0.02, w)), m, from + dir * (s + w * 0.5) + side * rng.randf_range(-0.12, 0.12), parent)
+		seg.position.y = -0.29
+		seg.look_at(seg.global_position + dir if seg.is_inside_tree() else seg.position + dir, Vector3.UP)
+		seg.rotation.y = atan2(-dir.x, -dir.z)
+		seg.rotation.x = 0.0
+		s += w + rng.randf_range(0.2, 0.8)
 
 
-static func _house(layout: Node3D) -> void:
+static func foam_ring(parent: Node3D, center: Vector3, radius: float, seed_value: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var m := glow(Color(0.75, 0.75, 0.72), 1.0)
+	var a := 0.0
+	while a < TAU:
+		var span := rng.randf_range(0.08, 0.25)
+		var mid := a + span * 0.5
+		var r := radius + rng.randf_range(-0.1, 0.15)
+		var seg := mesh(box(Vector3(0.07, 0.02, r * span)), m, center + Vector3(cos(mid), 0, sin(mid)) * r, parent)
+		seg.position.y = -0.29
+		seg.rotation.y = -mid
+		a += span + rng.randf_range(0.03, 0.12)
+
+
+# --- Land ------------------------------------------------------------------------------
+
+static func build_house(parent: Node3D, at: Vector3) -> Node3D:
 	var house := StaticBody3D.new()
 	house.name = "House"
-	house.position = Vector3(3.5, 0, 6.6)
-	layout.add_child(house)
+	house.position = at
+	parent.add_child(house)
 	var shape := CollisionShape3D.new()
 	var bs := BoxShape3D.new()
-	bs.size = Vector3(3.0, 3.0, 3.0)
+	bs.size = Vector3(4.0, 4.0, 4.0)
 	shape.shape = bs
-	shape.position.y = 1.5
+	shape.position.y = 2.0
 	house.add_child(shape)
-
 	var white := mat(BONE)
 	var ink := mat(INK)
-	mesh(box(Vector3(3.0, 2.2, 3.0)), white, Vector3(0, 1.1, 0), house)
+	mesh(box(Vector3(4.0, 2.8, 4.0)), white, Vector3(0, 1.4, 0), house)
 	var roof := PrismMesh.new()
-	roof.size = Vector3(3.7, 1.5, 3.5)
-	mesh(roof, ink, Vector3(0, 2.95, 0), house)
-	mesh(box(Vector3(0.45, 1.1, 0.45)), ink, Vector3(0.9, 3.3, 0.6), house)  # chimney
-	# The door faces the camera: the little man steps out of it into the night.
-	mesh(box(Vector3(0.9, 1.55, 0.08)), ink, Vector3(0, 0.78, 1.52), house)
-	for x in [-0.95, 0.95]:
-		mesh(box(Vector3(0.5, 0.5, 0.06)), ink, Vector3(x, 1.4, 1.52), house)
-	mesh(box(Vector3(0.06, 0.5, 0.5)), ink, Vector3(1.52, 1.4, 0.3), house)
-	# Clapboard lines, so the white walls read as a drawn house in 1-bit.
-	for i in 5:
-		mesh(box(Vector3(3.02, 0.03, 3.02)), ink, Vector3(0, 0.25 + i * 0.4, 0), house)
-	mesh(box(Vector3(1.4, 0.12, 0.7)), mat(ASH), Vector3(0, 0.06, 1.85), house)  # step
+	roof.size = Vector3(4.8, 2.0, 4.6)
+	mesh(roof, ink, Vector3(0, 3.8, 0), house)
+	mesh(box(Vector3(0.55, 1.5, 0.55)), ink, Vector3(1.2, 4.3, 0.8), house)
+	mesh(box(Vector3(1.1, 2.1, 0.08)), ink, Vector3(0, 1.05, 2.02), house)
+	for x in [-1.3, 1.3]:
+		mesh(box(Vector3(0.6, 0.6, 0.06)), ink, Vector3(x, 1.75, 2.02), house)
+	mesh(box(Vector3(0.06, 0.6, 0.6)), ink, Vector3(2.02, 1.75, 0.4), house)
+	for i in 6:
+		mesh(box(Vector3(4.02, 0.03, 4.02)), ink, Vector3(0, 0.3 + i * 0.45, 0), house)
+	mesh(box(Vector3(1.6, 0.12, 0.8)), mat(ASH), Vector3(0, 0.06, 2.4), house)
+	return house
 
 
-static func _mountains(layout: Node3D) -> void:
-	var peaks := [Vector4(0, -29, 9.0, 13.0), Vector4(-10, -26, 6.5, 8.5), Vector4(9, -27, 5.5, 7.0)]
-	for p in peaks:
-		var root := Node3D.new()
-		root.name = "Mountain"
-		root.position = Vector3(p.x, 0, p.y)
-		layout.add_child(root)
-		mesh(cone(p.z, p.w, 5), mat(Color(0.2, 0.2, 0.21)), Vector3(0, p.w * 0.5, 0), root)
-		# Snow cap: a smaller white cone on the same slope.
-		mesh(cone(p.z * 0.3, p.w * 0.3, 5), mat(BONE), Vector3(0, p.w * 0.85 + 0.02, 0), root)
+## A pine that dwarfs the house. Lightbound: a dark forest you only see in passing.
+static func make_pine(lbm: Lightbound, parent: Node3D, at: Vector3, height: float) -> void:
+	var tree := Node3D.new()
+	tree.name = "Pine"
+	tree.position = at
+	parent.add_child(tree)
+	lb(lbm, cyl(height * 0.018, height * 0.35, 6), INK, Vector3(0, height * 0.175, 0), tree)
+	for i in 4:
+		var r := (1.0 - i * 0.2) * height * 0.2
+		var h := height * 0.34
+		lb(lbm, cone(r, h, 7), Color(0.1, 0.1, 0.11), Vector3(0, height * 0.28 + i * h * 0.48 + h * 0.5, 0), tree)
 
 
-static func _shore_details(layout: Node3D) -> void:
+static func shore_rocks(parent: Node3D, center: Vector3, half: Vector2, count: int, seed_value: int, keep_clear_x := 3.0) -> void:
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 7
-	# Rocks along both shorelines.
-	for i in 18:
-		var far := i >= 10
-		var x := rng.randf_range(-6.5, 6.5) if not far else rng.randf_range(-5.5, 5.5)
-		var z := (2.1 + rng.randf_range(-0.2, 0.3)) if not far else (-11.4 + rng.randf_range(-0.3, 0.2))
-		if absf(x) < 1.6:
-			continue  # keep the path landing clear
-		var s := SphereMesh.new()
-		var r := rng.randf_range(0.18, 0.45)
-		s.radius = r
-		s.height = r * 1.3
-		s.radial_segments = 6
-		s.rings = 3
-		mesh(s, mat(STONE if rng.randf() < 0.5 else ASH), Vector3(x, 0.02, z), layout)
-	# Reeds: thin ink strokes in clumps at the water's edge.
-	for c in 6:
-		var cx := rng.randf_range(-6.5, 6.5)
-		if absf(cx) < 2.0:
-			cx += 3.0 * signf(cx + 0.01)
-		var cz := 2.0 if c % 2 == 0 else -11.3
-		for k in 5:
-			var h := rng.randf_range(0.5, 1.1)
-			var reed := mesh(box(Vector3(0.04, h, 0.04)), mat(INK),
-				Vector3(cx + rng.randf_range(-0.4, 0.4), h * 0.5 - 0.3, cz + rng.randf_range(-0.3, 0.3)), layout)
-			reed.rotation.z = rng.randf_range(-0.2, 0.2)
+	rng.seed = seed_value
+	for i in count:
+		var x := rng.randf_range(-half.x, half.x)
+		if absf(x) < keep_clear_x:
+			continue
+		var r := rng.randf_range(0.25, 1.1)
+		var m := mesh(sphere(r, 6, 0.65), mat(STONE if rng.randf() < 0.5 else ASH),
+			center + Vector3(x, 0.05, rng.randf_range(-half.y, half.y)), parent)
+		m.rotation.y = rng.randf() * TAU
 
 
-static func _doorway(exit: Node3D) -> void:
+static func reeds(parent: Node3D, center: Vector3, spread: float, seed_value: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	for k in 9:
+		var h := rng.randf_range(0.6, 1.6)
+		var reed := mesh(box(Vector3(0.05, h, 0.05)), mat(INK),
+			center + Vector3(rng.randf_range(-spread, spread), h * 0.5 - 0.3, rng.randf_range(-spread * 0.6, spread * 0.6)), parent)
+		reed.rotation.z = rng.randf_range(-0.25, 0.25)
+
+
+# --- The colossal --------------------------------------------------------------------------
+
+## A drowned hand reaching out of the lake. The path threads between its fingers.
+static func make_hand(lbm: Lightbound, parent: Node3D, at: Vector3) -> Node3D:
+	var hand := Node3D.new()
+	hand.name = "DrownedHand"
+	hand.position = at
+	parent.add_child(hand)
+	var skin := Color(0.78, 0.78, 0.76)
+	# Four fingers on the left, curling over the path; a thumb on the right.
+	var fingers := [
+		[Vector3(-6.0, 0, 4.5), 13.0, 1.5], [Vector3(-7.2, 0, 0.8), 16.0, 1.6],
+		[Vector3(-6.8, 0, -3.0), 15.0, 1.55], [Vector3(-5.4, 0, -6.4), 11.0, 1.35],
+	]
+	for f in fingers:
+		_finger(lbm, hand, f[0], f[1], f[2], -1.0, skin)
+	_finger(lbm, hand, Vector3(6.0, 0, 2.0), 10.0, 1.8, 1.0, skin)
+	# The palm, just under the surface.
+	var palm := lb(lbm, sphere(8.0, 14, 0.25), Color(0.5, 0.5, 0.49), Vector3(-2.0, -2.6, 0.0), hand)
+	palm.scale = Vector3(1.0, 1.0, 1.25)
+	return hand
+
+
+static func _finger(lbm: Lightbound, hand: Node3D, base: Vector3, length: float, r: float, side: float, skin: Color) -> void:
+	# Two segments: a near-vertical rise, then a knuckle that bends over toward the path.
+	var root := Node3D.new()
+	root.position = base
+	root.rotation.z = side * 0.18
+	hand.add_child(root)
+	var l1 := length * 0.6
+	lb(lbm, capsule(r, l1 + r * 2.0), skin, Vector3(0, l1 * 0.5, 0), root)
+	var knuckle := Node3D.new()
+	knuckle.position = Vector3(0, l1, 0)
+	knuckle.rotation.z = side * 0.95
+	root.add_child(knuckle)
+	var l2 := length * 0.45
+	lb(lbm, capsule(r * 0.88, l2 + r * 2.0), skin, Vector3(0, l2 * 0.5, 0), knuckle)
+	lb(lbm, sphere(r * 1.05, 10), skin, Vector3.ZERO, knuckle)
+	# A dark nail at the tip.
+	var nail := lb(lbm, sphere(r * 0.6, 8, 0.3), INK, Vector3(0, l2 + r * 0.6, -r * 0.45), knuckle)
+	nail.rotation.x = 0.4
+
+
+## A face the size of a hill, sleeping in the water beside the path.
+static func make_head(lbm: Lightbound, parent: Node3D, at: Vector3) -> void:
+	var head := Node3D.new()
+	head.name = "DrownedHead"
+	head.position = at
+	head.rotation.y = deg_to_rad(-70)  # faces the path
+	parent.add_child(head)
+	var skin := Color(0.72, 0.72, 0.7)
+	lb(lbm, sphere(12.0, 20), skin, Vector3.ZERO, head)
+	# Brow, nose, closed eyes, mouth, on the face's -Z side.
+	var brow := lb(lbm, box(Vector3(14.0, 1.4, 3.0)), skin, Vector3(0, 4.2, -10.6), head)
+	brow.rotation.x = 0.25
+	var nose := PrismMesh.new()
+	nose.size = Vector3(3.6, 6.0, 3.0)
+	lb(lbm, nose, skin, Vector3(0, 0.6, -12.2), head)
+	for x in [-4.4, 4.4]:
+		var lid := lb(lbm, sphere(2.4, 12, 0.45), Color(0.5, 0.5, 0.49), Vector3(x, 2.6, -10.7), head)
+		lid.scale = Vector3(1.0, 1.0, 0.6)
+		var lash := lb(lbm, box(Vector3(4.2, 0.22, 0.5)), INK, Vector3(x, 2.15, -11.65), head)
+		lash.rotation.z = 0.08 * signf(x)
+	lb(lbm, box(Vector3(5.0, 0.35, 1.0)), INK, Vector3(0, -3.6, -11.4), head)
+
+
+## A lone figure, built like the little man and forty metres tall, watching from the lake.
+static func make_watcher(lbm: Lightbound, parent: Node3D, at: Vector3, height: float, look_at_pos: Vector3) -> void:
+	var w := Node3D.new()
+	w.name = "Watcher"
+	w.position = at
+	parent.add_child(w)
+	var flat := Vector3(look_at_pos.x, at.y, look_at_pos.z)
+	if flat.distance_to(at) > 0.1:
+		w.rotation.y = atan2(-(flat.x - at.x), -(flat.z - at.z))
+	var r := height * 0.25
+	lb(lbm, capsule(r, height), BONE, Vector3(0, height * 0.5 - height * 0.12, 0), w)
+	lb(lbm, sphere(r * 0.5, 10), BONE, Vector3(0, height * 0.66, -r * 0.92), w)  # the nose
+
+
+## The ruined lighthouse on the island, with a lamp room that wakes when its fire is lit.
+static func make_lighthouse(lbm: Lightbound, parent: Node3D, at: Vector3) -> Node3D:
+	var lh := Node3D.new()
+	lh.name = "Lighthouse"
+	lh.position = at
+	parent.add_child(lh)
+	lb(lbm, cyl(2.4, 24.0, 10, 1.7), BONE, Vector3(0, 12.0, 0), lh)
+	for i in 4:
+		lb(lbm, cyl(2.36 - i * 0.17 + 0.05, 1.6, 10), INK, Vector3(0, 3.0 + i * 5.5, 0), lh)
+	lb(lbm, cyl(2.4, 0.5, 10), INK, Vector3(0, 24.2, 0), lh)
+	lb(lbm, cyl(1.4, 2.4, 8), Color(0.2, 0.2, 0.2), Vector3(0, 25.6, 0), lh)
+	lb(lbm, cone(1.8, 1.8, 8), INK, Vector3(0, 27.7, 0), lh)
+	# A door at its foot.
+	lb(lbm, box(Vector3(1.0, 1.9, 0.2)), INK, Vector3(0, 0.95, 2.42), lh)
+	var lamp := Node3D.new()
+	lamp.name = "Lamp"
+	lamp.position = Vector3(0, 25.6, 0)
+	lh.add_child(lamp)
+	return lh
+
+
+## Light the lighthouse: a slow white beam that sweeps the lake. It is moonlight, not fire,
+## so it touches nothing into being, it only shows how much darkness there is.
+static func wake_lighthouse(lh: Node3D) -> Node3D:
+	var lamp := lh.get_node("Lamp") as Node3D
+	var core := mesh(sphere(0.9, 10), glow(Color(1, 1, 1), 3.0), Vector3.ZERO, lamp)
+	core.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var pivot := Node3D.new()
+	pivot.name = "Beam"
+	lamp.add_child(pivot)
+	var beam := CylinderMesh.new()
+	beam.top_radius = 0.6
+	beam.bottom_radius = 9.0
+	beam.height = 90.0
+	beam.radial_segments = 16
+	beam.cap_top = false
+	beam.cap_bottom = false
+	var bm := StandardMaterial3D.new()
+	bm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	bm.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+	bm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	bm.albedo_color = Color(1, 1, 1, 0.07)
+	var bmi := mesh(beam, bm, Vector3(0, 0, -45.0), pivot)
+	bmi.rotation.x = deg_to_rad(-90 - 6)
+	bmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var spot := SpotLight3D.new()
+	spot.light_color = Color(1, 1, 1)
+	spot.light_energy = 3.0
+	spot.spot_range = 110.0
+	spot.spot_angle = 7.0
+	spot.rotation.x = deg_to_rad(-12)
+	pivot.add_child(spot)
+	return pivot
+
+
+## The far shore: a ramp of pale stone rising 14 m to a plateau cut into the mountain's root.
+static func build_ascent(lbm: Lightbound, parent: Node3D, shore_z: float, top_y: float, ramp_len: float) -> void:
+	var run := ramp_len
+	var angle := atan2(top_y, run)
+	var length := sqrt(run * run + top_y * top_y)
+	var mid := Vector3(0, top_y * 0.5, shore_z - 4.0 - run * 0.5)
+	var basis := Basis(Vector3.RIGHT, angle)
+	var up := basis * Vector3.UP
+	box_body(parent, "Ramp", Vector3(9.0, 1.0, length), Transform3D(basis, mid - up * 0.5), Color(0.5, 0.5, 0.48))
+	# Steps drawn on the ramp so it reads as a stair at this scale.
+	var ink := mat(Color(0.3, 0.3, 0.29))
+	var steps := int(length / 0.9)
+	for i in steps:
+		var s := mesh(box(Vector3(9.02, 0.04, 0.12)), ink, Vector3.ZERO, parent)
+		s.transform = Transform3D(basis, mid + basis * Vector3(0, 0.0, length * 0.5 - (i + 0.5) * length / steps))
+	# The plateau and the cliff it sits on.
+	var plateau_z := shore_z - 4.0 - run
+	box_body(parent, "Plateau", Vector3(30.0, 1.0, 24.0),
+		Transform3D(Basis.IDENTITY, Vector3(0, top_y - 0.5, plateau_z - 12.0)), SHORE)
+	box_body(parent, "Cliff", Vector3(90.0, top_y + 24.0, 70.0),
+		Transform3D(Basis.IDENTITY, Vector3(0, (top_y + 24.0) * 0.5 - 10.5, plateau_z - 24.0 - 35.0)), ROCK)
+	for side in [-1.0, 1.0]:
+		box_body(parent, "RampWall", Vector3(30.0, top_y + 10.0, run + 6.0),
+			Transform3D(Basis.IDENTITY, Vector3(side * 19.5, (top_y + 10.0) * 0.5 - 10.5, shore_z - 4.0 - run * 0.5 + 1.0)), ROCK)
+	# Monoliths flank the climb and ring the plateau.
+	for i in 6:
+		var t := (i + 0.5) / 6.0
+		for side in [-1.0, 1.0]:
+			var p := Vector3(side * 5.6, top_y * t, shore_z - 4.0 - run * t)
+			var m := lb(lbm, box(Vector3(1.4, 9.0, 1.0)), STONE, p + Vector3(0, 4.5, 0), parent)
+			m.rotation.z = side * 0.04
+	for i in 10:
+		var a := PI + TAU * (i + 0.5) / 12.0
+		var p := Vector3(cos(a) * 12.0, top_y, plateau_z - 12.0 + sin(a) * 10.0)
+		if p.z > plateau_z - 1.5:
+			continue
+		lb(lbm, box(Vector3(1.8, 12.0, 1.2)), STONE, p + Vector3(0, 6.0, 0), parent).rotation.y = -a
+
+
+static func make_doorway(exit: Node3D) -> void:
 	var frame := Node3D.new()
 	frame.name = "Doorway"
 	exit.add_child(frame)
 	var ink := mat(INK)
-	mesh(box(Vector3(0.25, 2.4, 0.4)), ink, Vector3(-0.85, 1.2, 0), frame)
-	mesh(box(Vector3(0.25, 2.4, 0.4)), ink, Vector3(0.85, 1.2, 0), frame)
-	mesh(box(Vector3(1.95, 0.28, 0.4)), ink, Vector3(0, 2.4, 0), frame)
-	# A red glow in the doorway: the way home is warm.
-	mesh(box(Vector3(1.45, 2.25, 0.05)), glow(FIRE_RED, 1.6), Vector3(0, 1.12, 0.12), frame)
+	mesh(box(Vector3(0.6, 7.0, 0.8)), ink, Vector3(-2.2, 3.5, 0), frame)
+	mesh(box(Vector3(0.6, 7.0, 0.8)), ink, Vector3(2.2, 3.5, 0), frame)
+	mesh(box(Vector3(5.0, 0.7, 0.8)), ink, Vector3(0, 7.2, 0), frame)
+	mesh(box(Vector3(3.8, 6.8, 0.05)), glow(FIRE_RED, 1.6), Vector3(0, 3.4, 0.3), frame)
 	var l := OmniLight3D.new()
 	l.light_color = FIRE_LIGHT
-	l.light_energy = 1.2
-	l.omni_range = 3.0
-	l.position = Vector3(0, 1.2, -0.6)
+	l.light_energy = 2.0
+	l.omni_range = 9.0
+	l.position = Vector3(0, 3.0, 2.0)
 	frame.add_child(l)
 
 
-# --- Props ------------------------------------------------------------------------------
+# --- Props -------------------------------------------------------------------------------
 
-static func make_stone(on_path: bool) -> StaticBody3D:
+static func make_stone(lbm: Lightbound, on_path: bool) -> StaticBody3D:
 	var body := StaticBody3D.new()
 	body.name = "Stone"
 	body.set_meta(&"on_path", on_path)
-	body.collision_layer = 1
+	body.collision_layer = 0
 	body.collision_mask = 0
 	var shape := CollisionShape3D.new()
 	var cs := CylinderShape3D.new()
@@ -242,33 +503,10 @@ static func make_stone(on_path: bool) -> StaticBody3D:
 	shape.shape = cs
 	shape.position.y = -0.3
 	body.add_child(shape)
-	var top := CylinderMesh.new()
-	top.top_radius = 0.82
-	top.bottom_radius = 0.92
-	top.height = 0.6
-	top.radial_segments = 7
-	top.rings = 1
-	mesh(top, mat(STONE if on_path else ASH), Vector3(0, -0.3, 0), body)
-	# A dark band at the waterline, so stones read against the black lake.
-	var band := CylinderMesh.new()
-	band.top_radius = 0.93
-	band.bottom_radius = 0.95
-	band.height = 0.12
-	band.radial_segments = 7
-	band.rings = 1
-	mesh(band, mat(INK), Vector3(0, -0.36, 0), body)
+	var top := cyl(0.92, 0.6, 7, 0.82)
+	lb(lbm, top, STONE if on_path else ASH, Vector3(0, -0.3, 0), body, 0.8)
+	lb(lbm, cyl(0.95, 0.12, 7, 0.93), INK, Vector3(0, -0.36, 0), body, 0.8)
 	return body
-
-
-static func make_tree(height: float) -> Node3D:
-	var tree := Node3D.new()
-	tree.name = "Tree"
-	mesh(box(Vector3(0.14, height * 0.3, 0.14)), mat(INK), Vector3(0, height * 0.15, 0), tree)
-	for i in 3:
-		var r := (0.95 - i * 0.22) * height * 0.32
-		var h := height * 0.42
-		mesh(cone(r, h, 6), mat(Color(0.08, 0.08, 0.09)), Vector3(0, height * 0.32 + i * h * 0.5 + h * 0.5, 0), tree)
-	return tree
 
 
 ## A fire: logs, three flickering flame cones, rising embers and a red light.
@@ -279,15 +517,10 @@ static func make_fire(size := 1.0, with_ring := false) -> Node3D:
 	if with_ring:
 		for i in 7:
 			var a := TAU * i / 7.0
-			var s := SphereMesh.new()
-			s.radius = 0.16
-			s.height = 0.2
-			s.radial_segments = 6
-			s.rings = 3
-			mesh(s, mat(STONE), Vector3(cos(a), 0, sin(a)) * 0.55, fire)
+			mesh(sphere(0.16, 6, 0.6), mat(STONE), Vector3(cos(a), 0, sin(a)) * 0.55, fire)
 	for i in 3:
-		var log := mesh(box(Vector3(0.12, 0.12, 0.85)), mat(INK), Vector3(0, 0.08, 0), fire)
-		log.rotation = Vector3(0.25, TAU * i / 3.0, 0)
+		var stick := mesh(box(Vector3(0.12, 0.12, 0.85)), mat(INK), Vector3(0, 0.08, 0), fire)
+		stick.rotation = Vector3(0.25, TAU * i / 3.0, 0)
 	var layers := [[0.34, 0.95, FIRE_DEEP, 2.0], [0.24, 0.8, FIRE_RED, 3.0], [0.12, 0.55, FIRE_CORE, 4.0]]
 	for i in layers.size():
 		var L: Array = layers[i]
@@ -310,26 +543,25 @@ static func make_fire(size := 1.0, with_ring := false) -> Node3D:
 	return fire
 
 
-## The cold fire pit under the mountain: a ring of stones around dead ash.
-static func make_fire_pit() -> Node3D:
+## A cold fire pit. `great` makes the brazier on the plateau: a stone bowl on a plinth.
+static func make_fire_pit(great := false) -> Node3D:
 	var pit := Node3D.new()
 	pit.name = "FirePit"
-	for i in 8:
-		var a := TAU * i / 8.0
-		var s := SphereMesh.new()
-		s.radius = 0.2
-		s.height = 0.26
-		s.radial_segments = 6
-		s.rings = 3
-		mesh(s, mat(STONE), Vector3(cos(a), 0, sin(a)) * 0.7, pit)
-	var ash := CylinderMesh.new()
-	ash.top_radius = 0.5
-	ash.bottom_radius = 0.55
-	ash.height = 0.06
-	mesh(ash, mat(ASH), Vector3(0, 0.03, 0), pit)
-	for i in 2:
-		var log := mesh(box(Vector3(0.12, 0.12, 0.8)), mat(INK), Vector3(0, 0.1, 0), pit)
-		log.rotation = Vector3(0.2, PI * 0.5 * i + 0.4, 0)
+	var k := 2.2 if great else 1.0
+	if great:
+		mesh(cyl(2.6, 1.2, 8, 2.2), mat(Color(0.3, 0.3, 0.3)), Vector3(0, 0.6, 0), pit)
+		mesh(cyl(2.9, 0.9, 10, 3.3), mat(STONE), Vector3(0, 1.65, 0), pit)
+		mesh(cyl(2.7, 0.1, 10), mat(ASH), Vector3(0, 2.12, 0), pit)
+	else:
+		for i in 8:
+			var a := TAU * i / 8.0
+			mesh(sphere(0.2, 6, 0.65), mat(STONE), Vector3(cos(a), 0, sin(a)) * 0.7, pit)
+		mesh(cyl(0.55, 0.06, 8, 0.5), mat(ASH), Vector3(0, 0.03, 0), pit)
+	var y := 2.15 if great else 0.1
+	for i in 3:
+		var stick := mesh(box(Vector3(0.12, 0.12, 0.8) * k), mat(INK), Vector3(0, y, 0), pit)
+		stick.rotation = Vector3(0.2, TAU * i / 3.0 + 0.4, 0)
+	pit.set_meta(&"fire_height", y)
 	return pit
 
 
@@ -337,7 +569,7 @@ static func make_fire_pit() -> Node3D:
 static func make_torch() -> Node3D:
 	var torch := Node3D.new()
 	torch.name = "Torch"
-	mesh(box(Vector3(0.07, 0.7, 0.07)), mat(INK), Vector3(0, 0.0, 0), torch)
+	mesh(box(Vector3(0.07, 0.7, 0.07)), mat(INK), Vector3.ZERO, torch)
 	var flame := make_fire(0.42)
 	flame.position = Vector3(0, 0.32, 0)
 	torch.add_child(flame)
@@ -353,8 +585,8 @@ static func make_glyph() -> Node3D:
 	var root := Node3D.new()
 	root.name = "Glyph"
 	var s := SphereMesh.new()
-	s.radius = 0.12
-	s.height = 0.34
+	s.radius = 0.14
+	s.height = 0.4
 	s.radial_segments = 4
 	s.rings = 2
 	var mi := mesh(s, glow(FIRE_RED, 2.5), Vector3.ZERO, root)
@@ -363,7 +595,7 @@ static func make_glyph() -> Node3D:
 	return root
 
 
-static func _embers(amount: int, life: float, one_shot := false) -> CPUParticles3D:
+static func _embers(amount: int, life: float, one_shot := false, speed := 1.0) -> CPUParticles3D:
 	var p := CPUParticles3D.new()
 	p.name = "Embers"
 	p.amount = amount
@@ -371,17 +603,17 @@ static func _embers(amount: int, life: float, one_shot := false) -> CPUParticles
 	p.one_shot = one_shot
 	p.explosiveness = 0.9 if one_shot else 0.0
 	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	p.emission_sphere_radius = 0.25
+	p.emission_sphere_radius = 0.25 * speed
 	p.direction = Vector3.UP
 	p.spread = 25.0 if not one_shot else 70.0
 	p.gravity = Vector3(0, 1.0, 0)
-	p.initial_velocity_min = 0.4
-	p.initial_velocity_max = 1.2 if not one_shot else 3.0
+	p.initial_velocity_min = 0.4 * speed
+	p.initial_velocity_max = (1.2 if not one_shot else 3.0) * speed
 	p.damping_min = 0.5
 	p.damping_max = 1.5
 	p.position = Vector3(0, 0.5, 0)
 	var q := QuadMesh.new()
-	q.size = Vector2(0.06, 0.06)
+	q.size = Vector2(0.06, 0.06) * sqrt(speed)
 	var m := glow(FIRE_CORE, 4.0)
 	m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 	m.vertex_color_use_as_albedo = true
@@ -396,13 +628,12 @@ static func _embers(amount: int, life: float, one_shot := false) -> CPUParticles
 
 
 ## A burst of embers that cleans itself up.
-static func puff(parent: Node, at: Vector3, amount := 18) -> void:
-	var p := _embers(amount, 0.9, true)
+static func puff(parent: Node, at: Vector3, amount := 18, speed := 1.0) -> void:
+	var p := _embers(amount, 0.9 * sqrt(speed), true, speed)
 	parent.add_child(p)
 	p.global_position = at
-	p.position.y = at.y
 	p.emitting = true
-	parent.get_tree().create_timer(1.5).timeout.connect(p.queue_free)
+	parent.get_tree().create_timer(2.5).timeout.connect(p.queue_free)
 
 
 ## A white ring spreading on the water.
@@ -416,8 +647,7 @@ static func ripple(parent: Node, at: Vector3, grow := 1.4) -> void:
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	m.albedo_color.a = 0.7
 	var mi := mesh(t, m)
-	mi.scale = Vector3(1, 0.1, 1) * 0.8
-	mi.scale.y = 0.1
+	mi.scale = Vector3(0.8, 0.1, 0.8)
 	parent.add_child(mi)
 	mi.global_position = at
 	var tw := mi.create_tween().set_parallel().set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)

@@ -3,7 +3,7 @@
 Read this before adding anything. Several people (and Claude threads) build this game in
 parallel, each in its own folder, so the rules below are what keep us from stepping on each other.
 
-Engine: **Godot 4.3+** (GDScript, Forward+). The game has **no words**: no text in UI, rooms, or menus.
+Engine: **Godot 4.7** (open it in 4.7 or newer; older versions will warn) (GDScript, Forward+). The game has **no words**: no text in UI, rooms, or menus.
 
 ## Folders
 

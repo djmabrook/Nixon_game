@@ -51,7 +51,7 @@ const INK_CRIMSON := &"crimson"
 @onready var floor_mat: ShaderMaterial = $Floor/Mesh.material_override
 @onready var vignette_mat: ShaderMaterial = $Screen/Vignette.material
 @onready var negative: ColorRect = $Screen/Negative
-@onready var synth: AudioStreamPlayer = $Synth
+@onready var audio: Node = $Audio
 
 var _base_walk := 5.0
 var _base_run := 10.0
@@ -81,6 +81,7 @@ func _ready() -> void:
 	_sky_mat = env.sky.sky_material
 	_sky_mat.set_shader_parameter(&"awake", 1.0)
 	face.ground_provider = land.ground_height
+	audio.setup(face, land._tie_half_width)
 
 
 func _on_room_entered(_spawn: StringName) -> void:
@@ -88,6 +89,8 @@ func _on_room_entered(_spawn: StringName) -> void:
 	_base_run = Game.player.run_speed
 	face.caught_player.connect(_on_caught)
 	face.revealed.connect(_on_revealed)
+	face.sees_player_changed.connect(_on_sees_player_changed)
+	Game.player.walking_changed.connect(_on_walking_changed)
 	foot.body_entered.connect(_on_foot_body.bind(true))
 	foot.body_exited.connect(_on_foot_body.bind(false))
 	exit_disc.body_entered.connect(_on_exit_disc_entered)
@@ -138,7 +141,7 @@ func plant_fire() -> void:
 		add_child(fire)
 	fire.global_position = Game.player.global_position
 	_fires.append(fire)
-	synth.sting(0.15)
+	audio.planted(fire.global_position)
 
 
 func lay_disc() -> void:
@@ -218,10 +221,11 @@ func _process(delta: float) -> void:
 	floor_mat.set_shader_parameter(&"face_motion", face.motion)
 	floor_mat.set_shader_parameter(&"stare", _effective_stare)
 
-	synth.motion = face.motion
-	synth.stare = _effective_stare
-	synth.proximity = proximity
-	synth.ring = 0.0 if _ended or face.sees_player else _nearest_phone_closeness(player.global_position)
+	var phone := _nearest_phone(player.global_position)
+	var ring := 0.0
+	if phone and not _ended and not face.sees_player:
+		ring = clampf(1.0 - phone.global_position.distance_to(player.global_position) / 90.0, 0.0, 1.0)
+	audio.update(proximity, _effective_stare, face.motion, ring, phone.global_position if phone else Vector3.ZERO)
 
 	_turn_mics(player, delta)
 	exit_ring.rotate_object_local(Vector3.UP, delta * 0.3)
@@ -251,13 +255,29 @@ func _turn_mics(player: Player, delta: float) -> void:
 		head.global_rotation.y = lerp_angle(head.global_rotation.y, want, clampf(delta * 0.8, 0.0, 1.0))
 
 
-## Telephones ring when he is out of the Watcher's sight. 1 = right beside one.
-func _nearest_phone_closeness(p: Vector3) -> float:
-	var best := 0.0
+## Telephones ring when he is out of the Watcher's sight; this finds the one to ring.
+func _nearest_phone(p: Vector3) -> Node3D:
+	var best: Node3D = null
 	for phone: Node3D in land.telephones:
-		var d := phone.global_position.distance_to(p)
-		best = maxf(best, 1.0 - d / 90.0)
+		if best == null or phone.global_position.distance_squared_to(p) < best.global_position.distance_squared_to(p):
+			best = phone
 	return best
+
+
+func _on_sees_player_changed(sees: bool) -> void:
+	if sees:
+		audio.seen()
+
+
+## When he sets off, the nearest microphone tower turns to his footsteps.
+func _on_walking_changed(walking: bool) -> void:
+	if not walking:
+		return
+	var p := Game.player.global_position
+	for head: Node3D in land.mic_heads:
+		if head.global_position.distance_to(p) < 80.0:
+			audio.mic_turned(head.global_position + Vector3.UP * 38.0)
+			return
 
 
 func _apply_shake(delta: float, proximity: float) -> void:
@@ -276,7 +296,7 @@ func _on_revealed(distance: float) -> void:
 	var strength := clampf(distance / 150.0, 0.2, 1.0)
 	_shake = maxf(_shake, 0.4 + 0.5 * strength)
 	_flash = maxf(_flash, 0.3 * strength)
-	synth.sting(strength)
+	audio.revealed(strength)
 
 
 func _on_caught() -> void:
@@ -289,13 +309,14 @@ func _on_caught() -> void:
 	# He stiffens into a small grey statue, a monument like the Watcher.
 	_turn_to_stone(player)
 	face.lunge(player.global_position)
-	synth.slam()
+	audio.caught()
 	_shake = 1.0
 	# The world seen from inside the stare: the Negative, for a beat.
 	negative.visible = true
 	await get_tree().create_timer(0.7).timeout
 	negative.visible = false
 	await get_tree().create_timer(maxf(catch_reset_delay - 0.7, 0.0)).timeout
+	audio.rewind()
 	_reset()
 
 
@@ -312,7 +333,7 @@ func raise_ember() -> void:
 	var light := fire.get_node(^"Light") as OmniLight3D
 	create_tween().tween_property(light, "omni_range", 400.0, 3.0)
 	Game.camera.play_shot(Game.player.global_position + Vector3(30, 8, 40), face.centre(), 3.0, 2.0)
-	create_tween().tween_property(synth, "volume_db", -80.0, 4.0)
+	audio.eyes_close(face.centre())
 	create_tween().tween_method(func(v): _sky_mat.set_shader_parameter(&"awake", v), 1.0, 0.0, 6.0)
 
 

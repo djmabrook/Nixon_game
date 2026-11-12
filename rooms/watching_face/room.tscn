@@ -14,6 +14,7 @@
 [ext_resource type="Shader" path="res://rooms/watching_face/vignette.gdshader" id="vignette"]
 [ext_resource type="Shader" path="res://rooms/watching_face/negative.gdshader" id="negative"]
 [ext_resource type="Script" path="res://rooms/watching_face/dread_synth.gd" id="synth"]
+[ext_resource type="Script" path="res://rooms/watching_face/mountain_audio.gd" id="audio"]
 
 [sub_resource type="ShaderMaterial" id="sky_mat"]
 shader = ExtResource("sky")
@@ -240,3 +241,7 @@ mouse_filter = 2
 
 [node name="Synth" type="AudioStreamPlayer" parent="."]
 script = ExtResource("synth")
+
+[node name="Audio" type="Node" parent="."]
+script = ExtResource("audio")
+synth_path = NodePath("../Synth")

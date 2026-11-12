@@ -26,6 +26,9 @@ func _ready() -> void:
 	_check(room.room_id == ROOM, "entered room")
 	_check(cam.focus_target == face, "face is the camera's focus")
 	_check(face.head_radius() > 150.0 and face.model != null, "the Watcher model, mountain sized")
+	var snd := get_node_or_null(^"/root/Sound")
+	if snd:
+		_check(room.audio.has_shared_sound(), "uses the shared Sound system (broadcast, grind, bed)")
 	_check(land.mic_heads.size() >= 50 and land.telephones.size() >= 10, "mic forest and telephones raised")
 	face.wake_delay = 0.0
 	face._awake_in = 0.0
@@ -135,6 +138,9 @@ func _ready() -> void:
 	var rest := face.global_position
 	await _seconds(2.0)
 	_check(face.global_position.distance_to(rest) < 0.01, "behind him and off screen, nothing moves")
+	if snd:
+		await _seconds(4.5)
+		_check(snd.call(&"is_hushed"), "and the world falls silent but his steps")
 	_place(player, room.get_node("ExitDisc").global_position + Vector3(0, 2, 0))
 	await _seconds(0.6)
 	_check(Game.is_completed(ROOM), "the black disc beyond the face completes the room")

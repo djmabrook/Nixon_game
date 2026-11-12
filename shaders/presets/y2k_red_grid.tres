@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="DitherLookSettings" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://shaders/dither_look_settings.gd" id="1_settings"]
+
+[resource]
+resource_name = "y2k_red_grid"
+script = ExtResource("1_settings")
+palette = PackedColorArray(0.02353, 0.01569, 0.01176, 1, 0.4706, 0.04314, 0.08627, 1, 0.7294, 0.102, 0.1686, 1, 0.851, 0.3922, 0.4314, 1, 0.9137, 0.6196, 0.6431, 1, 0.9412, 0.8706, 0.8471, 1, 0.9843, 0.949, 0.9412, 1)
+virtual_height = 360
+dither_spread = 0.35
+bayer_size = 3
+accent_threshold = 0.0
+contrast = 1.2
+brightness = 0.0
+saturation = 1.0
+grain = 0.0
+soft_sampling = false

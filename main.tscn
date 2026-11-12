@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://main.gd" id="1"]
+[ext_resource type="PackedScene" path="res://shaders/dither_look.tscn" id="2_dither"]
 
 [node name="Main" type="Node"]
 script = ExtResource("1")
@@ -9,3 +10,5 @@ script = ExtResource("1")
 
 [node name="PostProcess" type="CanvasLayer" parent="."]
 layer = 50
+
+[node name="DitherLook" parent="PostProcess" instance=ExtResource("2_dither")]

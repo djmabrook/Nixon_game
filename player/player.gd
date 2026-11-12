@@ -7,7 +7,9 @@ extends CharacterBody3D
 ## Fired when the player starts or stops walking (handy for sprite animation).
 signal walking_changed(is_walking: bool)
 
-@export var move_speed := 4.0
+@export var move_speed := 5.0
+## Speed while holding `run`. Rooms are hundreds of meters across.
+@export var run_speed := 10.0
 @export var acceleration := 30.0
 @export var friction := 40.0
 @export var gravity := 20.0
@@ -31,7 +33,8 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	var dir := get_move_direction() if controls_enabled else Vector3.ZERO
-	var target := dir * move_speed
+	var speed := run_speed if controls_enabled and Input.is_action_pressed(&"run") else move_speed
+	var target := dir * speed
 	var horizontal := Vector3(velocity.x, 0.0, velocity.z)
 	var rate := acceleration if dir != Vector3.ZERO else friction
 	horizontal = horizontal.move_toward(target, rate * delta)
@@ -51,6 +54,15 @@ func _physics_process(delta: float) -> void:
 	if walking != is_walking:
 		is_walking = walking
 		walking_changed.emit(walking)
+
+
+## Turn instantly to face a world direction (flattened onto the ground).
+func face(direction: Vector3) -> void:
+	direction.y = 0.0
+	if direction.length_squared() < 0.0001:
+		return
+	facing = direction.normalized()
+	visual.rotation.y = atan2(-facing.x, -facing.z)
 
 
 ## Input turned into a world-space direction on the XZ plane, aligned to the camera

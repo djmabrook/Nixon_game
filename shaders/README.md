@@ -75,8 +75,9 @@ scenery instead of sitting on the screen, so the dither doesn't crawl ("shower d
 - **Perspective (FollowCamera):** every frame DitherLook measures how far the centre of the view
   slid across the screen and shifts the grid and pattern by that many whole pixels. Orbiting and
   looking around carry the pattern with distant terrain, sky and fog. The pattern is never rotated
-  against the pixel grid, so there's no moire. Near ground still drifts slightly as the camera
-  travels, which reads as texture. Measured in the vast demo (0.37° orbit, upper half of frame):
+  against the pixel grid, so there's no moire. Walking needs no correction: the follow camera
+  keeps the scene almost still on screen (one stride changes about 2% of pixels), and near
+  ground drifts only slightly, which reads as texture. Measured in the vast demo (0.37° orbit, upper half of frame):
   97.4% of pixels unchanged once aligned with the scenery, versus 90.8% without.
 - **Orthographic:** the grid is anchored to the camera position and the camera is nudged onto
   whole screen pixels via `h_offset`/`v_offset` (its transform is never touched). After a

@@ -290,7 +290,9 @@ func _take_shots(dir: String) -> void:
 	await _frames(3)
 	_save(dir + "/h_drain_60.png")
 	dither.drain = 0.0
-	dither.eyelids_to(LOOKS[2], 1.0)
+	var lid := DitherLookSettings.new()
+	lid.palette = PackedColorArray([Color("0b0a0c")])
+	dither.eyelids_to(lid, 1.0)
 	await get_tree().create_timer(0.55).timeout
 	_save(dir + "/h_eyelids_half.png")
 	get_tree().quit()

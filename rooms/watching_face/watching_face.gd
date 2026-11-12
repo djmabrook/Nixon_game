@@ -92,7 +92,8 @@ func _on_room_entered(_spawn: StringName) -> void:
 	foot.body_exited.connect(_on_foot_body.bind(false))
 	exit_disc.body_entered.connect(_on_exit_disc_entered)
 	floor_mat.set_shader_parameter(&"face_radius", face.head_radius())
-	# The reveal: pull far back so he is a speck on the grid under the staircase and the face.
+	# The reveal: pull far back so he is a speck on the grid, and the Watcher opens his eyes.
+	face.open_eyes(3.0)
 	if DisplayServer.get_name() != "headless":
 		Game.camera.play_vista(face.centre(), 80.0, 2.5, 2.5)
 

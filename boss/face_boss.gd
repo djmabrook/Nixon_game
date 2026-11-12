@@ -137,6 +137,24 @@ func _ready() -> void:
 			_pupil_mat.emission = Color(1.0, 0.05, 0.1)
 
 
+## Open the lids (from closed) with one beat of a big crimson halo. Rooms call it on arrival.
+func open_eyes(time := 2.0) -> void:
+	for lid in _lids:
+		lid.rotation_degrees.x = 0.0
+		create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT) \
+				.tween_property(lid, "rotation_degrees:x", eyelid_open_deg, time)
+	if _glows.is_empty():
+		return
+	var halo := _add_glow(_glows[0].get_parent(), (_glows[0].position + _glows[1].position) * 0.5 if _glows.size() > 1 else _glows[0].position)
+	halo.pixel_size *= 9.0
+	halo.modulate.a = 0.0
+	var t := create_tween()
+	t.tween_interval(time * 0.8)
+	t.tween_property(halo, "modulate:a", 0.9, 0.25)
+	t.tween_property(halo, "modulate:a", 0.0, 1.2)
+	t.tween_callback(halo.queue_free)
+
+
 ## Shut the eyes for good: no stare, no movement, lights out.
 func close_eyes(time := 2.0) -> void:
 	active = false
@@ -327,8 +345,7 @@ func _update_sight(player: Player, delta: float) -> void:
 		_pupil_mat.emission_energy_multiplier = lerpf(IDLE_GLOW, 6.0, stare)
 	if not _closed:
 		for g in _glows:
-			g.modulate.a = lerpf(0.55, 1.0, stare)
-			g.pixel_size = lerpf(0.00003, 0.00006, stare)
+			g.modulate.a = lerpf(0.75, 1.0, stare)
 	for eye in _eyes:
 		var pupil := eye.get_child(0) as Node3D if eye.get_child_count() > 0 else null
 		if pupil:
@@ -387,7 +404,10 @@ func _build_model() -> void:
 		_lids.append(lid)
 
 
-## A soft crimson disc that always faces the camera and keeps the same size on screen.
+const EYE_DISC_RADIUS := 0.45
+
+
+## A crimson point that always faces the camera, twice the size of its eye disc.
 func _add_glow(parent: Node3D, at: Vector3) -> Sprite3D:
 	var grad := Gradient.new()
 	grad.set_color(0, Color(1.0, 0.25, 0.3, 1.0))
@@ -403,13 +423,13 @@ func _add_glow(parent: Node3D, at: Vector3) -> Sprite3D:
 	var s := Sprite3D.new()
 	s.texture = tex
 	s.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	s.fixed_size = true
-	s.pixel_size = 0.00003
+	# Twice the eye disc across, in the model's own units, so the eyes stay two hard points.
+	s.pixel_size = (EYE_DISC_RADIUS * 4.0) / tex.width
 	s.shaded = false
 	s.double_sided = true
 	s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
 	s.transparent = true
-	s.modulate = Color(1, 1, 1, 0.55)
+	s.modulate = Color(1, 1, 1, 0.75)
 	s.position = at + Vector3(0, 0, 0.12)
 	s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	parent.add_child(s)

@@ -26,7 +26,7 @@ const COLLAR_Y := 200.0
 const COLLAR_HALF_W := 450.0
 
 ## Where the tie road meets the knot: the foot of the face.
-const FOOT := Vector3(0, COLLAR_Y, -440)
+const FOOT := Vector3(0, COLLAR_Y, -420)
 
 const MIC_TOWER := preload("res://rooms/watching_face/models/microphone_tower.glb")
 

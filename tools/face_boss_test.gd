@@ -36,7 +36,7 @@ func _ready() -> void:
 	_place(player, Vector3(0, 42, 440))
 	await _frames(60)
 	_check(absf(player.global_position.y - 40.0) < 2.0, "staircase carries him up (y=%.1f)" % player.global_position.y)
-	_place(player, Vector3(0, 1, 700))
+	_place(player, Vector3(0, 1, 640))
 	await _frames(10)
 
 	# Watched: in view, frozen.
@@ -72,7 +72,7 @@ func _ready() -> void:
 	_check(face.global_position.distance_to(held_at) > 1.0, "outside the light it moves again")
 
 	# Cover hides him from the stare and hides the face from the camera.
-	var cover := _cover_near(room, Vector3(0, 0, 640))
+	var cover := _cover_near(room, Vector3(0, 0, 630))
 	_check(cover != null, "found cover on the plain")
 	var away := (cover.global_position - face.global_position) * Vector3(1, 0, 1)
 	_place(player, cover.global_position + away.normalized() * 16.0 + Vector3.UP)
@@ -81,7 +81,7 @@ func _ready() -> void:
 	await _frames(10)
 	_check(not face.sees_player and not face.is_watched, "cover blocks its stare and your view")
 	# Out on the open avenue down the middle of the plain.
-	_place(player, Vector3(0, 1, 650))
+	_place(player, Vector3(0, 1, 620))
 	cam.face_toward(face.centre())
 	await _seconds(1.2)
 	_check(face.sees_player and player.move_speed < 5.0 * 0.6, "open ground: it stares and slows him")
@@ -160,7 +160,7 @@ func _cover_near(room: Node, p: Vector3) -> Node3D:
 	var best: Node3D = null
 	for c in room.get_node("Cover").get_children():
 		var n := c as Node3D
-		if n.global_position.z < 620.0 or n.global_position.z > 680.0:
+		if n.global_position.z < 590.0 or n.global_position.z > 680.0:
 			continue
 		if best == null or n.global_position.distance_to(p) < best.global_position.distance_to(p):
 			best = n

@@ -153,15 +153,16 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 300, 780)
 shape = SubResource("wall_z")
 
 [node name="FaceBoss" parent="." instance=ExtResource("face")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 200, -760)
-catch_radius = 240.0
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 200, -800)
+catch_radius = 300.0
+model_scale = 50.0
 model = ExtResource("bust")
 eyelid_left = ExtResource("lid_l")
 eyelid_right = ExtResource("lid_r")
 ride_height = 0.0
 
 [node name="Foot" type="Area3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 210, -430)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 210, -415)
 collision_layer = 4
 collision_mask = 2
 monitorable = false
@@ -199,12 +200,12 @@ pull_back = 120.0
 shape = SubResource("vista_shape")
 
 [node name="from_hub" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 700)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 640)
 script = ExtResource("spawn")
 is_default = true
 
 [node name="ExitToHub" type="Area3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 715)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 655)
 script = ExtResource("exit")
 
 [node name="Shape" type="CollisionShape3D" parent="ExitToHub"]

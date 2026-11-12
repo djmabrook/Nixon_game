@@ -17,6 +17,14 @@ extends Node3D
 		_build()
 @export var trunk_color := Color(0.30, 0.13, 0.09)
 @export var frond_color := Color(0.12, 0.38, 0.22)
+## 0 = drained (black silhouette), 1 = full colour. The hub raises it a third per ink.
+@export_range(0.0, 1.0) var color_amount := 1.0:
+	set(v):
+		color_amount = v
+		_tint()
+
+var _trunk_mat: StandardMaterial3D
+var _frond_mat: StandardMaterial3D
 
 
 func _ready() -> void:
@@ -38,12 +46,13 @@ func _build() -> void:
 		remove_child(c)
 		c.free()
 	var trunk_mat := StandardMaterial3D.new()
-	trunk_mat.albedo_color = trunk_color
 	trunk_mat.roughness = 1.0
 	var frond_mat := StandardMaterial3D.new()
-	frond_mat.albedo_color = frond_color
 	frond_mat.roughness = 1.0
 	frond_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_trunk_mat = trunk_mat
+	_frond_mat = frond_mat
+	_tint()
 
 	var segs := 7
 	var top := Vector3.ZERO
@@ -82,3 +91,11 @@ func _build() -> void:
 			pivot.add_child(leaf)
 			leaf.position = Vector3(0.5 + 1.0 * k, 0.15 - 0.45 * k, 0)
 			leaf.rotation.z = 0.25 - 0.75 * k
+
+
+func _tint() -> void:
+	if _trunk_mat == null:
+		return
+	var black := Color(0.02, 0.02, 0.02)
+	_trunk_mat.albedo_color = black.lerp(trunk_color, color_amount)
+	_frond_mat.albedo_color = black.lerp(frond_color, color_amount)

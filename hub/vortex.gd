@@ -9,6 +9,9 @@ signal swallowed(player: Player, room_id: StringName)
 ## Room ids in arm order, and the angle (radians, atan2(z, x)) where each arm meets the rim.
 var room_ids: Array[StringName] = []
 var arm_angles: PackedFloat32Array = []
+## Which slices lead anywhere. A locked groove (the ultraviolet one before three inks)
+## is closed, and walking in over it takes you to the nearest open room instead.
+var open: Array[bool] = []
 
 
 func _ready() -> void:
@@ -23,10 +26,14 @@ func room_at_angle(angle: float) -> StringName:
 	var best := 0
 	var best_d := INF
 	for i in arm_angles.size():
+		if i < open.size() and not open[i]:
+			continue
 		var d := absf(angle_difference(angle, arm_angles[i]))
 		if d < best_d:
 			best_d = d
 			best = i
+	if best_d == INF:
+		return &""
 	return room_ids[best]
 
 

@@ -58,6 +58,7 @@ extends Room
 const STAKE_SCENE := preload("res://hub/props/ember_stake.tscn")
 const BEACON_SCALE := 30.0
 const RIDDEN_META := &"hub_ridden_grooves"
+const InkState := preload("res://hub/hub_story.gd")
 
 var _ids: Array[StringName] = []
 var _arm_angles: PackedFloat32Array = []
@@ -67,6 +68,11 @@ var _pull_grace := 0.0
 var _sliding := 0.0
 var _lowest_r_on := {}   # arm index -> lowest radius reached this visit
 var _max_r_on := {}      # arm index -> highest radius reached this visit
+var _arm_colors: Array[Color] = []
+var _arm_reach: Array[float] = []
+var _open: Array[bool] = []
+var _stakes: Array = []
+var _room_inks := {}   # room id -> the ink it gives
 
 @onready var _sand: StaticBody3D = $SandVortex
 @onready var _vortex: RoomExit = $Vortex
@@ -82,7 +88,20 @@ func _ready() -> void:
 	# (StringName arrays don't sort alphabetically on their own).
 	_ids.sort_custom(func(a: StringName, b: StringName) -> bool: return String(a) < String(b))
 	var n := _ids.size()
-	var start_offset := first_arm_outer_angle - arm_winding * (arm_outer_radius - pit_radius)
+	# The locked (ultraviolet) groove's outer end points at the Watcher's mountain;
+	# the others share the circle evenly with it.
+	for id in _ids:
+		_room_inks[id] = _read_gives_ink(id)
+	var outer_angle := first_arm_outer_angle
+	var locked := -1
+	for i in n:
+		if opens_with_eye(_ids[i]):
+			locked = i
+			break
+	if locked >= 0:
+		var to_mountain: Vector3 = $Landmarks.watcher_position()
+		outer_angle = atan2(to_mountain.z, to_mountain.x) - TAU * float(locked) / float(n)
+	var start_offset := outer_angle - arm_winding * (arm_outer_radius - pit_radius)
 	for i in n:
 		_arm_angles.append(wrapf(start_offset + TAU * float(i) / float(n), -PI, PI))
 
@@ -93,16 +112,19 @@ func _ready() -> void:
 	_sand_mat.set_shader_parameter("pit_radius", pit_radius)
 	_sand_mat.set_shader_parameter("crest_radius", _sand.crest_radius)
 	_sand_mat.set_shader_parameter("vortex_radius", _sand.crest_radius)
-	var colors: Array[Vector4] = []
-	colors.resize(16)
-	colors.fill(Vector4.ZERO)
+	_arm_colors.resize(16)
+	_arm_colors.fill(Color(0, 0, 0, 0))
+	_arm_reach.resize(16)
+	_arm_reach.fill(arm_outer_radius + 20.0)
 	for i in mini(n, 16):
 		var c := room_color(_ids[i])
-		colors[i] = Vector4(c.r, c.g, c.b, 0.0 if Game.is_completed(_ids[i]) else 1.0)
-	_sand_mat.set_shader_parameter("arm_colors", colors)
+		_arm_colors[i] = Color(c.r, c.g, c.b, 0.0)
+		_open.append(not Game.is_room_locked(_ids[i]))
+	refresh_arms()
 
 	_vortex.room_ids = _ids
 	_vortex.arm_angles = _arm_angles
+	_vortex.open = _open
 	_vortex.position = _sand.ground_point(Vector2.ZERO)
 	(_vortex.get_node("CollisionShape3D").shape as CylinderShape3D).radius = pit_radius - 1.0
 	_vortex.swallowed.connect(_on_swallowed)
@@ -114,12 +136,106 @@ func _ready() -> void:
 		_add_arm(i)
 	var start: Node3D = $from_start
 	start.position = _sand.ground_point(Vector2(start.position.x, start.position.z))
+	# Anchors for the opening and ending sequences (story/), stood on the sand.
+	for anchor in $StoryAnchors.get_children():
+		anchor.position = _sand.ground_point(Vector2(anchor.position.x, anchor.position.z))
+	# The hub's television sits half-buried at first_tv; it droops a third per ink.
+	var tv: Node3D = $WatchingSet
+	var tv_spot: Node3D = $StoryAnchors/first_tv
+	tv.position = tv_spot.position + Vector3.DOWN * 1.2
 
 
 ## A stable, saturated color per room id, so a room keeps its color as rooms are added.
-static func room_color(id: StringName) -> Color:
+## Rooms that give an ink use that ink's colour; the mountain is ultraviolet.
+func room_color(id: StringName) -> Color:
+	var ink: StringName = _room_inks.get(id, &"")
+	if ink != &"" or opens_with_eye(id):
+		return InkState.ink_color(ink)
 	var h := float(hash(String(id)) % 997) / 997.0
 	return Color.from_hsv(h, 0.75, 1.0)
+
+
+# --- Grooves, for the ink state (hub_story.gd) and the story sequences ----------
+
+func room_count() -> int:
+	return _ids.size()
+
+
+func room_at(i: int) -> StringName:
+	return _ids[i]
+
+
+func arm_index(room_id: StringName) -> int:
+	return _ids.find(room_id)
+
+
+## The ink a room gives when mended (its root's gives_ink), or &"".
+func room_ink(room_id: StringName) -> StringName:
+	return _room_inks.get(room_id, &"")
+
+
+func arm_for_ink(ink: StringName) -> int:
+	for i in _ids.size():
+		if _room_inks.get(_ids[i], &"") == ink:
+			return i
+	return -1
+
+
+## A room that needs all three inks (the mountain) opens with the eye, and its groove
+## points at the Watcher.
+func opens_with_eye(room_id: StringName) -> bool:
+	return Game.required_inks_for(room_id).size() >= Game.INKS.size()
+
+
+func _read_gives_ink(room_id: StringName) -> StringName:
+	var state := (load(Game.room_path(room_id)) as PackedScene).get_state()
+	for k in state.get_node_property_count(0):
+		if state.get_node_property_name(0, k) == &"gives_ink":
+			return StringName(state.get_node_property_value(0, k))
+	return &""
+
+
+func room_open(room_id: StringName) -> bool:
+	var i := _ids.find(room_id)
+	return i >= 0 and i < _open.size() and _open[i]
+
+
+## How far the room's ink has filled its groove (0 dry .. 1 full to the beacon).
+func set_arm_fill(i: int, fill: float) -> void:
+	if i >= 0 and i < 16:
+		_arm_colors[i].a = fill
+
+
+## How far out (m) the groove is drawn. 0 hides a locked groove.
+func set_arm_reach(i: int, reach: float) -> void:
+	if i >= 0 and i < 16:
+		_arm_reach[i] = reach
+
+
+func refresh_arms() -> void:
+	_sand_mat.set_shader_parameter("arm_colors", _arm_colors)
+	_sand_mat.set_shader_parameter("arm_reach", _arm_reach)
+
+
+## Open or close a groove: its pit slice leads to its room and its beacon stands.
+func set_arm_open(i: int, on: bool) -> void:
+	if i < 0 or i >= _open.size():
+		return
+	_open[i] = on
+	_vortex.open = _open
+	for s in _stakes:
+		if s.get_meta("room_id") == _ids[i]:
+			s.visible = on
+
+
+func stakes() -> Array:
+	return _stakes
+
+
+## The dawn state, for the ending: sunrise, full colour, the Watcher's lights out.
+func set_dawn(on: bool) -> void:
+	$InkState.dawn_override = 1 if on else 0
+	$InkState.apply_static()
 
 
 ## Angle (atan2(z, x)) of arm `i` at distance `r` from the center.
@@ -143,7 +259,10 @@ func _add_arm(i: int) -> void:
 	stake.scale = Vector3.ONE * BEACON_SCALE
 	stake.set("light_range", 140.0)
 	stake.set("color", room_color(id))
-	stake.set("lit", not Game.is_completed(id))
+	stake.set("lit", false)   # hub_story.gd lights them when ember comes home
+	stake.set_meta("room_id", id)
+	stake.visible = _open[i] if i < _open.size() else true
+	_stakes.append(stake)
 
 	# Return spot: a little way up the groove, facing out of the pit.
 	var spawn := RoomSpawn.new()
@@ -177,6 +296,10 @@ func _on_room_entered(_spawn: StringName) -> void:
 	_lowest_r_on.clear()
 	_max_r_on.clear()
 	_footprints.call("track", p)
+	# Arriving with an ink plants it now; the planting plays once the fade clears.
+	if Game.carried != &"":
+		Game.bring_home()
+	$InkState.play_pending.call_deferred()
 
 
 func _on_travel_done() -> void:
@@ -330,7 +453,10 @@ func _arm_under(world: Vector3) -> int:
 	var d := absf(u - nearest) * TAU / n * r
 	if d > 10.0:
 		return -1
-	return posmod(int(nearest), n)
+	var idx := posmod(int(nearest), n)
+	if idx < _open.size() and not _open[idx]:
+		return -1
+	return idx
 
 
 ## The sand takes him: he spirals down into the pit, shrinking, then the room loads.

@@ -7,7 +7,7 @@ extends Node3D
 ## - Watcher: a mountain on the horizon with two faint red lights near its peak.
 ## - Beacon: a lit tower far out at sea.
 ## - PinkStorm: a bank of pink storm cloud.
-## - BlackDisc: a black disc hanging in the sky.
+## - BlackDisc: a black disc hanging in the sky (there from the start; gone once crimson is home).
 ## The story decides when each appears; flip the exports (or call set_layer) to show them.
 
 @export var watcher := true:
@@ -22,9 +22,14 @@ extends Node3D
 	set(v):
 		pink_storm = v
 		_sync()
-@export var black_disc := false:
+@export var black_disc := true:
 	set(v):
 		black_disc = v
+		_sync()
+## The Watcher's two red lights. They go out at dawn.
+@export var watcher_eyes := true:
+	set(v):
+		watcher_eyes = v
 		_sync()
 ## Color the far silhouettes lean toward, standing in for atmospheric haze.
 @export var haze := Color(0.32, 0.07, 0.06)
@@ -33,6 +38,11 @@ extends Node3D
 func _ready() -> void:
 	_build()
 	_sync()
+
+
+## Where the Watcher's mountain stands (local), so the hub can aim the fourth groove at it.
+func watcher_position() -> Vector3:
+	return _polar(3200.0, 225.0)
 
 
 func set_layer(layer: StringName, on: bool) -> void:
@@ -56,6 +66,10 @@ func _sync() -> void:
 	for pair in [["Watcher", watcher], ["Beacon", beacon], ["PinkStorm", pink_storm], ["BlackDisc", black_disc]]:
 		if has_node(pair[0]):
 			get_node(pair[0]).visible = pair[1]
+	if has_node("Watcher"):
+		for eye in $Watcher.get_children():
+			if eye.name.begins_with("Eye"):
+				eye.visible = watcher_eyes
 
 
 func _mat(c: Color, emit := false) -> StandardMaterial3D:
@@ -83,7 +97,7 @@ func _build() -> void:
 	var w := Node3D.new()
 	w.name = "Watcher"
 	add_child(w)
-	w.position = _polar(3200.0, 225.0)
+	w.position = watcher_position()
 	var peak := MeshInstance3D.new()
 	var cone := CylinderMesh.new()
 	cone.top_radius = 40.0

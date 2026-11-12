@@ -6,6 +6,8 @@ uniform vec3 deep : source_color = vec3(0.02, 0.10, 0.12);
 uniform vec3 shallow : source_color = vec3(0.05, 0.42, 0.42);
 uniform vec3 glint : source_color = vec3(1.0, 0.45, 0.25);
 uniform float shore_radius = 1000.0;
+// Story palette: 0 = black sea, 1 = full teal. Each ink brings back a third.
+uniform float color_amount = 0.0;
 
 varying vec3 world_pos;
 
@@ -22,11 +24,13 @@ void fragment() {
 	}
 	float t = clamp((r - shore_radius) / 900.0, 0.0, 1.0);
 	vec3 col = mix(shallow, deep, sqrt(t));
+	vec3 black_sea = mix(vec3(0.06, 0.06, 0.06), vec3(0.0), sqrt(t));
+	col = mix(black_sea, col, color_amount);
 	// Rings of foam/shimmer rolling toward the shore.
 	float band = sin(r * 0.12 + TIME * 1.4 + sin(atan(p.y, p.x) * 5.0) * 0.6);
-	col += vec3(0.08, 0.2, 0.2) * smoothstep(0.92, 1.0, band) * (1.0 - t);
+	col += mix(vec3(0.2), vec3(0.08, 0.2, 0.2), color_amount) * smoothstep(0.92, 1.0, band) * (1.0 - t);
 	// The vortex's red glow catches the water.
 	float sparkle = step(0.995, fract(sin(dot(floor(p * 1.0), vec2(12.9898, 78.233)) + floor(TIME * 2.0)) * 43758.5453));
-	col += glint * sparkle * 0.6 * (1.0 - t * 0.5);
+	col += mix(vec3(0.5, 0.48, 0.42), glint, color_amount) * sparkle * 0.6 * (1.0 - t * 0.5);
 	ALBEDO = col;
 }

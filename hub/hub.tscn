@@ -1,4 +1,4 @@
-[gd_scene load_steps=24 format=3]
+[gd_scene load_steps=26 format=3]
 
 [ext_resource type="Script" path="res://hub/hub.gd" id="1"]
 [ext_resource type="Script" path="res://core/room_spawn.gd" id="2"]
@@ -10,6 +10,8 @@
 [ext_resource type="Script" path="res://hub/footprints.gd" id="8"]
 [ext_resource type="Shader" path="res://hub/night_sky.gdshader" id="9"]
 [ext_resource type="Script" path="res://hub/landmarks.gd" id="10"]
+[ext_resource type="Script" path="res://hub/hub_story.gd" id="11"]
+[ext_resource type="PackedScene" path="res://props/watching_set.tscn" id="12"]
 
 [sub_resource type="ShaderMaterial" id="sky_mat"]
 shader = ExtResource("9")
@@ -158,9 +160,27 @@ omni_range = 420.0
 omni_attenuation = 1.0
 
 [node name="from_start" type="Marker3D" parent="."]
-transform = Transform3D(0.7071, 0, 0.7071, 0, 1, 0, -0.7071, 0, 0.7071, 657.6, 0, 657.6)
+transform = Transform3D(0.7071, 0, 0.7071, 0, 1, 0, -0.7071, 0, 0.7071, 735.0, 0, 590.0)
 script = ExtResource("2")
 is_default = true
+
+[node name="InkState" type="Node" parent="."]
+script = ExtResource("11")
+
+[node name="StoryAnchors" type="Node3D" parent="."]
+
+[node name="shore_wake" type="Marker3D" parent="StoryAnchors" groups=["story_anchor"]]
+transform = Transform3D(0.7071, 0.0000, 0.7071, 0.0000, 1.0000, 0.0000, -0.7071, 0.0000, 0.7071, 696.50, 0, 696.50)
+
+[node name="first_tv" type="Marker3D" parent="StoryAnchors" groups=["story_anchor"]]
+transform = Transform3D(0.7071, 0.0000, 0.7071, 0.0000, 1.0000, 0.0000, -0.7071, 0.0000, 0.7071, 594.11, 0, 760.43)
+
+[node name="margin_exit" type="Marker3D" parent="StoryAnchors" groups=["story_anchor"]]
+transform = Transform3D(0.2588, 0.0000, 0.9659, 0.0000, 1.0000, 0.0000, -0.9659, 0.0000, 0.2588, -256.23, 0, 956.27)
+
+[node name="WatchingSet" parent="." instance=ExtResource("12")]
+transform = Transform3D(2.1213, 0, 2.1213, 0, 3, 0, -2.1213, 0, 2.1213, 594.11, 0, 760.43)
+droop_with_inks = true
 
 [node name="Landmarks" type="Node3D" parent="."]
 script = ExtResource("10")

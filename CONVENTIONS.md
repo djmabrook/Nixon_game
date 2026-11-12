@@ -19,6 +19,7 @@ dither look over everything. Keep it original: our own places, shapes and palett
 | `hub/` | The sand spiral hub (`hub/hub.tscn`, room id `hub`) | hub thread |
 | `rooms/<room_id>/` | One folder per room, fully self-contained | one thread per room |
 | `rooms/_template/` | Copy this to start a room. Never loaded by the game | foundation |
+| `props/` | Shared props: `watching_set.tscn`, carried-ink objects in `props/carry/<ink>.tscn` | foundation + art |
 | `boss/` | The face that moves only when unwatched | boss thread |
 | `shaders/` | Dither / pixel post-process and shared shaders | shader thread |
 | `art/` | Shared sprites, textures, palettes | sprites thread |
@@ -88,6 +89,33 @@ Things you can bend without touching shared code:
 Do not keep state in global variables. Anything that must survive leaving a room goes through `Game`
 (today that's only `completed_rooms`; ask before adding more).
 
+## Story state
+
+The story is in the doc "Little Man: the silent through-line". The foundation holds its state on `Game`,
+saved to `user://save.json` on every change.
+
+- **Inks**: `Game.INKS` is `ember`, `salmon`, `crimson`. A mended room gives its ink to carry; the hub
+  plants it. `Game.carry(ink)`, `Game.bring_home()` (returns the ink or `&""`), `Game.carried`,
+  `Game.inks_home` (arrival order), `Game.is_ink_home(ink)`, `Game.all_inks_home()`,
+  `Game.ink_progress()` (0 to 1). Signals: `ink_gained(ink)` when he picks one up,
+  `ink_home(ink)` when it's planted, `carried_changed(ink)`.
+- **Mending a room**: set the room root's `gives_ink` export and call `complete()`. That marks the room
+  done, hands him the ink and fires `room_completed`.
+- **Locking**: the room root's `required_inks` export. `Game.is_room_locked(id)`; locked rooms refuse
+  `go_to`, and the hub shows their door shut. The mountain uses all three.
+- **Carry slot**: `Game.player.carry_slot` shows what he carries and survives room travel (it reads
+  `Game.carried`). Put the real object at `props/carry/<ink>.tscn` and it's used automatically.
+- **Late shadow**: `Game.player.shadow_lag` (seconds) follows `Game.shadow_lag()`, 0.5 s with no inks
+  home down to 0 with all three. Set `shadow_lag_from_story = false` to drive it yourself.
+- **Flags**: `Game.set_flag(name, value)` / `Game.get_flag(name, default)` for small persistent facts
+  (`opening_seen`, `ending_seen`). `Game.new_cycle()` clears inks, carried and rooms but keeps flags;
+  `Game.reset_story()` wipes everything.
+- **The watching television**: instance `props/watching_set.tscn` (class `WatchingSet`). Its eyes track
+  the little man. `open()`, `droop(amount)`, `close()`, or set `mode` (`OPEN`, `DROOPING`, `CLOSED`).
+  It closes by itself when its room calls `complete()` (`close_on_room_complete`). In the hub, tick
+  `droop_with_inks` and it droops a third per ink and closes at three. Art can replace the meshes but
+  keep the node names `Screen/LeftEye|RightEye/{White,Pupil,Lid}`.
+
 ## Scale
 
 **1 unit = 1 meter.** The little man is 1.7 m tall, walks at 5 m/s and runs at 10 m/s.
@@ -139,7 +167,8 @@ Rooms may pick their own palette and lighting; keep text and UI out.
 - Play: open the project in Godot and press F5. The mouse is captured; Esc frees it, click to recapture. Start in a room directly with
   `godot --path . -- --room=test_room`, or set `start_room` on `main.tscn`.
 - Smoke test (run before every PR): `godot --headless --path . res://tools/smoke_test.tscn`.
-  Exit code 0 means the hub, a room, and the exit back all work.
+  Exit code 0 means the hub, a room, the exit back, and the story hooks all work.
+  It turns saving off, so it never touches your save.
 
 ## Git
 

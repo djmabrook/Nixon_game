@@ -8,6 +8,12 @@ extends Room
 @export var door_size := Vector3(8.0, 40.0, 3.0)
 
 
+## Placeholder planting ritual: arriving with an ink plants it straight away.
+func _on_room_entered(_spawn: StringName) -> void:
+	if Game.carried != &"":
+		Game.bring_home()
+
+
 func _ready() -> void:
 	var ids := Game.list_rooms()
 	for i in ids.size():
@@ -40,6 +46,12 @@ func _add_door(id: StringName, pos: Vector3) -> void:
 	var exit := RoomExit.new()
 	exit.name = "Door_%s" % id
 	exit.target_room = id
+	# Locked rooms (Room.required_inks not all home) get a shut door.
+	if Game.is_room_locked(id):
+		exit.enabled = false
+		var shut := StandardMaterial3D.new()
+		shut.albedo_color = Color(0.05, 0.05, 0.05)
+		bm.material = shut
 	var shape := CollisionShape3D.new()
 	var box := BoxShape3D.new()
 	box.size = Vector3(door_size.x, 4.0, 2.0)

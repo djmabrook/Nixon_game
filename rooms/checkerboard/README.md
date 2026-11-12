@@ -29,7 +29,8 @@ moon, the Watcher's eye, hangs low and circles it, and "down" always points at t
 | `room_sfx.gd` | Synthesized placeholder sounds (no audio files); swap entries in `sounds` for real samples |
 | `tests/check_checkerboard.tscn` | Headless check of this room |
 
-Hooks for other threads: `TVSpot` marks where the shared watching-television prop should sit
-near the entry, and `CraterVista` is a `VistaZone` on the approach to the crater.
+The room gives the **salmon** ink (`gives_ink`), which he carries out to the hub. A shared
+watching television (`props/watching_set.tscn`) sits half buried near the entry and shuts its eyes
+on the mend. `CraterVista` is a `VistaZone` on the approach to the crater.
 
 Check: `godot --headless --path . res://rooms/checkerboard/tests/check_checkerboard.tscn`

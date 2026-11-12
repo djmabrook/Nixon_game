@@ -8,6 +8,7 @@ var room
 
 
 func _ready() -> void:
+	Game.reset_story()   # start from a fresh save
 	var world := Node3D.new()
 	add_child(world)
 	await Game.start(world)
@@ -98,6 +99,8 @@ func _ready() -> void:
 	await _frames(60 * 8)
 	_check(room._moon_elev < 0.0 and room._moon_open < 0.05, "the eye shuts and sets")
 	_check(room._footing > 0.9, "pink footing blooms")
+	_check(Game.carried == &"salmon", "he carries the salmon ink out")
+	_check(room.get_node("WatchingSet").mode == WatchingSet.Mode.CLOSED, "the watching set closes its eyes")
 	_check(room._crater_exit != null and room._crater_exit.enabled, "an exit opens in the crater")
 
 	# --- Leave through the crater exit.

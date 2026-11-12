@@ -78,9 +78,9 @@ func _ready() -> void:
 	_check(room.interact() and room.beacon_is_lit, "lit the great brazier")
 	_check(Game.is_completed(&"lakeside"), "room completed")
 	_check(not Game.player.controls_enabled, "the reveal takes the camera")
-	for i in 1500:
+	for i in 3000:
 		await get_tree().physics_frame
-		if Game.player.controls_enabled:
+		if not room.revealing:
 			break
 	_check(Game.player.controls_enabled, "control returns after the reveal")
 	_check(room._head_climb > 700.0, "the light climbed the whole mountain")

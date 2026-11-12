@@ -42,10 +42,20 @@ const MOON_RADIUS := 80.0  # metres
 ## Islets: centre (x, z), radius. Each has a cold fire that becomes a checkpoint.
 const ISLETS := [Vector3(0, -128, 19.6), Vector3(0, -280, 26.0), Vector3(0, -405, 17.4)]  # plan x/z, radius in m
 const FAR_SHORE_Z := -497.0
-const PLATEAU_Y := 14.0
-## The Watcher's head (world metres), scaled up by HEAD_SCALE from its plan.
-const HEAD_CENTER := Vector3(0, 0, -1750)
-const HEAD_SCALE := 2.2
+## The beacon tower stands in the sea at the end of the crossing (world metres).
+const TOWER_CENTER := Vector3(0, 0, -1122.5)
+const TOWER_STEP_Y := 2.2  # top of the footing's outer step
+const RAMP_START_Z := -1092.0
+## The Watcher's bust (world metres): about 3 km tall, far beyond the beacon, inside the
+## mountain cone that hides him until the beacon's light climbs it.
+const HEAD_CENTER := Vector3(0, 0, -4200)
+const HEAD_SCALE := 220.0
+const CONE_RADIUS := 2600.0
+const CONE_HEIGHT := 3900.0
+## How tall the dissolving edge is as the light climbs (world metres).
+const CLIMB_BAND := 160.0
+## Where the climbing light ends, just above the summit.
+const CLIMB_TOP := 4100.0
 
 @export_group("Light")
 ## How far each light makes the world real, in metres.
@@ -83,6 +93,9 @@ var _drowning := false
 var _time := 0.0
 var _fade: ColorRect
 var _landmark: Marker3D
+var _tower: Node3D
+## True while the brazier's reveal plays.
+var revealing := false
 
 
 func _ready() -> void:
@@ -97,9 +110,11 @@ func _ready() -> void:
 	_build_land()
 	_build_crossing()
 	_build_colossi()
+	_add_room_audio()
 
 	var camp := Look.make_fire(1.0, true)
 	campfire_spot.add_child(camp)
+	_add_fire_loop(campfire_spot, -2.0)
 	fires.append({spot = campfire_spot, reach = campfire_reach, lit = true, spawn = &"shore", great = false, fire = camp})
 	_set_light_range(camp, campfire_reach)
 	for i in ISLETS.size():
@@ -114,7 +129,9 @@ func _ready() -> void:
 		spawn.position = spot.position + Vector3(1.6, 0, 1.6)
 		layout.add_child(spawn)
 		fires.append({spot = spot, reach = islet_reach, lit = false, spawn = spawn.name, great = false, fire = null})
-	beacon_spot.add_child(Look.make_fire_pit(true))
+	var pit := Look.make_fire_pit(false)
+	pit.scale = Vector3.ONE * 1.6
+	beacon_spot.add_child(pit)
 	fires.append({spot = beacon_spot, reach = 0.0, lit = false, spawn = &"plateau", great = true, fire = null})
 
 	torch = Look.make_torch()
@@ -130,6 +147,10 @@ func _ready() -> void:
 
 
 func _on_room_entered(_spawn: StringName) -> void:
+	_ink_the_little_man()
+	if Game.has_signal(&"room_changed"):
+		# Sound resets its footstep surface when the room changes, just after this.
+		Game.room_changed.connect(func(_r): _set_surface_resolver(), CONNECT_ONE_SHOT)
 	if Game.is_completed(room_id):
 		_light_fire(fires.back(), true)
 	_update_world()
@@ -152,6 +173,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed(&"interact") and not _drowning and Game.player.controls_enabled:
 		if interact():
 			get_viewport().set_input_as_handled()
+
+
+## In this region the fire is the only colour: the little man is drawn near-black.
+func _ink_the_little_man() -> void:
+	var ink := Look.mat(Color(0.05, 0.05, 0.055))
+	var slot := Game.player.carry_slot
+	for m: MeshInstance3D in Game.player.visual.find_children("*", "MeshInstance3D", true, false):
+		if m != slot and not slot.is_ancestor_of(m):
+			m.material_override = ink
 
 
 ## Does whatever makes sense where the little man stands. Returns true if something happened.
@@ -183,6 +213,9 @@ func is_real_at(world_pos: Vector3) -> bool:
 
 func _build_land() -> void:
 	Look.build_house(layout, Vector3(8, 0, 20)).rotation.y = PI * 0.5  # door faces east, beside the lake
+	Look.make_boat(layout, Vector3(-3.4, -0.18, -0.9), 0.5)
+	for t in [Vector4(-12, 0, 9, 0.3), Vector4(16, 0, 6, 2.0), Vector4(-20, 0, 24, 1.1)]:
+		Look.make_bare_tree(lb_material, layout, Vector3(t.x, t.y, t.z), t.w, 1.6)
 	Look.foam_line(layout, Vector3(-32, 0, 0.05), Vector3(32, 0, 0.05), 3)
 	Look.shore_rocks(layout, Vector3(0, 0, 1.2), Vector2(30, 0.8), 40, 11)
 	for x in [-14.0, 11.0, 22.0, -24.0]:
@@ -206,6 +239,7 @@ func _build_land() -> void:
 		Look.foam_ring(layout, c, isl.z + 0.1, 40 + i)
 		Look.shore_rocks(layout, c, Vector2(isl.z * 0.7, isl.z * 0.7), 10, 70 + i, 1.5)
 		Look.reeds(layout, c + Vector3(isl.z * 0.75, 0, 0), 1.0, 90 + i)
+		Look.make_bare_tree(lb_material, layout, c + Vector3(-isl.z * 0.45, 0, -isl.z * 0.3), 0.8 + i, 1.3)
 	Look.make_lighthouse(lb_material, layout, _plan(0, -280) + Vector3(9, 0, -8)).set_meta(&"islet", 1)
 	# Mid crossing, on the lighthouse islet: the camera drifts back until he is a red
 	# speck on a black plane under the mountain.
@@ -225,10 +259,10 @@ func _build_land() -> void:
 	vista.position = _plan(0, -280) + Vector3(0, 1.5, 0)
 
 	# The far shore: a narrow landing, the ascent, the plateau, the mountain.
-	var fz := FAR_SHORE_Z * S
-	Look.box_body(layout, "FarShore", Vector3(140, 1, 16), Transform3D(Basis.IDENTITY, Vector3(0, -0.5, fz - 8.0)), Look.SHORE)
-	Look.foam_line(layout, Vector3(-70, 0, fz + 0.05), Vector3(70, 0, fz + 0.05), 9)
-	Look.build_ascent(lb_material, layout, fz, PLATEAU_Y, 28.0)
+	# The far end: the beacon tower in the sea, a boat step up onto its footing.
+	_tower = Look.build_beacon(layout, TOWER_CENTER)
+	Look.boat_step(layout, Vector3(0, 0, RAMP_START_Z), Vector3(0, TOWER_STEP_Y, TOWER_CENTER.z + 23.5), 3.4)
+	Look.foam_ring(layout, TOWER_CENTER, 31.0, 9)
 	Look.make_doorway(mountain_exit)
 
 
@@ -236,6 +270,8 @@ func _build_crossing() -> void:
 	for leg in LEGS:
 		for run in leg:
 			for p in _sample(run[1]):
+				if p.y < RAMP_START_Z - 0.5:
+					continue  # the boat step takes over here
 				_add_walkable(p, run[0] == "pier", true)
 	for p in _sample(MOON_BRANCH).slice(1):
 		_add_walkable(p, false, false)
@@ -299,39 +335,62 @@ func _build_colossi() -> void:
 	_build_head()
 
 
-## The mountain. Crags of rock and snow that dissolve as the beacon's light climbs them,
-## uncovering the smooth stone head and shoulders of the Watcher, seen from behind.
+## The mountain: one clean cone of dark rock, streaked pale down its upper third, that
+## everyone has always taken for a mountain. As the beacon's light climbs it the cone
+## dissolves, uncovering the stone head and shoulders of the Watcher, seen from behind.
 func _build_head() -> void:
-	var root := Node3D.new()
+	var root: Node3D = Look.BustScene.instantiate()
 	root.name = "WatcherHead"
 	root.position = HEAD_CENTER
+	root.rotation.y = PI  # his back to the lake: he looks away, out of the world
 	root.scale = Vector3.ONE * HEAD_SCALE
 	layout.add_child(root)
-	var stone := Color(0.46, 0.46, 0.45)
-	var parts := [
-		[Look.capsule(70.0, 480.0), Vector3(0, 10, 30), Vector3(0, 0, PI * 0.5), Vector3(1, 1, 0.8)],  # shoulders
-		[Look.cyl(46.0, 90.0, 18), Vector3(0, 70, 0), Vector3.ZERO, Vector3.ONE],  # neck
-		[Look.sphere(88.0, 28), Vector3(0, 170, 0), Vector3.ZERO, Vector3(1, 1.08, 1)],  # skull
-		[Look.sphere(22.0, 14), Vector3(-87, 165, -12), Vector3.ZERO, Vector3(0.35, 1.2, 0.8)],  # ears
-		[Look.sphere(22.0, 14), Vector3(87, 165, -12), Vector3.ZERO, Vector3(0.35, 1.2, 0.8)],
-		[Look.sphere(70.0, 24), Vector3(0, 236, 6), Vector3.ZERO, Vector3(1.0, 0.36, 1.0)],  # snow on the dome
-		[Look.capsule(30.0, 150.0), Vector3(-150, 72, 30), Vector3(0, 0, PI * 0.5 - 0.12), Vector3(1, 0.5, 1)],  # snow on shoulders
-		[Look.capsule(30.0, 150.0), Vector3(150, 72, 30), Vector3(0, 0, PI * 0.5 + 0.12), Vector3(1, 0.5, 1)],
-	]
-	for i in parts.size():
-		var p: Array = parts[i]
-		var tint := Look.BONE if i >= 5 else stone
-		var m := Look.lb(head_material, p[0], tint, p[1], root, 0.0, 1.0)
-		m.rotation = p[2]
-		m.scale = p[3]
-	# The crags: what everyone has always taken for a mountain.
-	var crags := [
-		[Vector3(0, 0, 0), 175.0, 290.0], [Vector3(-150, 0, 40), 110.0, 150.0], [Vector3(150, 0, 30), 105.0, 140.0],
-		[Vector3(-60, 0, -40), 90.0, 200.0], [Vector3(70, 0, -30), 85.0, 215.0],
-	]
-	for c in crags:
-		Look.lb(head_material, Look.cone(c[1], c[2], 6), Color(0.15, 0.15, 0.16), c[0] + Vector3(0, c[2] * 0.5, 0), root, 0.0, 1.0, 1.0)
-		Look.lb(head_material, Look.cone(c[1] * 0.28, c[2] * 0.28, 6), Look.BONE, c[0] + Vector3(0, c[2] * 0.86 + 0.1, 0), root, 0.0, 1.0, 1.0)
+	for m: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
+		m.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		for i in m.mesh.get_surface_count():
+			var src := m.mesh.surface_get_material(i)
+			var tint := Color(0.46, 0.46, 0.45)
+			if src is StandardMaterial3D and (src as StandardMaterial3D).albedo_color.v < 0.95:
+				# Greys only: any red would turn to ember under the lake's 1-bit look.
+				var v := (src as StandardMaterial3D).albedo_color.get_luminance()
+				tint = Color(v, v, v)
+			m.set_surface_override_material(i, head_material.get_material(tint, 0.0, 1.0, 0.0))
+	# The cone that just encloses him, centred on his crown.
+	var cone_root := Node3D.new()
+	cone_root.name = "Mountain"
+	cone_root.position = HEAD_CENTER
+	layout.add_child(cone_root)
+	var rock := Look.lb(head_material, Look.cone(CONE_RADIUS, CONE_HEIGHT, 48), Color(0.13, 0.13, 0.14),
+		Vector3(0, CONE_HEIGHT * 0.5, 0), cone_root, 0.0, 1.0, 1.0)
+	rock.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Long pale streaks down the upper third, evenly spaced so the cone stays perfectly
+	# symmetrical. Alternate streaks run longer, like snow caught in gullies.
+	var streaks := 24
+	for i in streaks:
+		var a := TAU * i / streaks
+		var top := CONE_HEIGHT * 0.97
+		var bottom := CONE_HEIGHT * (0.56 if i % 2 == 0 else 0.7)
+		var p1 := _on_cone(a, top)
+		var p2 := _on_cone(a, bottom)
+		var length := p1.distance_to(p2)
+		var width := lerpf(26.0, 70.0, (CONE_HEIGHT - bottom) / CONE_HEIGHT)
+		var s := Look.lb(head_material, Look.box(Vector3(width, 3.0, length)), Look.BONE,
+			(p1 + p2) * 0.5, cone_root, 0.0, 1.0, 1.0)
+		var dir := (p1 - p2).normalized()
+		var out := Vector3(cos(a), 0, sin(a))
+		s.basis = Basis.looking_at(dir, out)
+		s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# The snowcap, so the summit reads as a mountain from the shore.
+	var cap_h := CONE_HEIGHT * 0.06
+	Look.lb(head_material, Look.cone(CONE_RADIUS * 0.06 + 6.0, cap_h, 48), Look.BONE,
+		Vector3(0, CONE_HEIGHT - cap_h * 0.5 + 2.0, 0), cone_root, 0.0, 1.0, 1.0)
+	head_material.set_all(&"climb_band", CLIMB_BAND)
+
+
+## A point just outside the cone's surface at angle `a` and height `y` (cone-local metres).
+func _on_cone(a: float, y: float) -> Vector3:
+	var r := CONE_RADIUS * (1.0 - y / CONE_HEIGHT) + 2.5
+	return Vector3(cos(a) * r, y, sin(a) * r)
 
 
 func _plan(x: float, z: float) -> Vector3:
@@ -491,10 +550,13 @@ func _light_fire(f: Dictionary, instant: bool) -> void:
 		return
 	f.lit = true
 	var pit: Node3D = f.spot.get_child(0)
-	var fire := Look.make_fire(2.6 if f.great else 1.15, false)
-	fire.position.y = pit.get_meta(&"fire_height", 0.0)
+	var fire := Look.make_fire(1.8 if f.great else 1.15, false)
+	fire.position.y = pit.get_meta(&"fire_height", 0.0) * pit.scale.y
 	f.spot.add_child(fire)
 	f.fire = fire
+	_add_fire_loop(f.spot, 0.0 if f.great else -3.0)
+	if not instant:
+		_sound(&"play_at", [&"fire_ignite", f.spot.global_position])
 	if f.great:
 		_set_light_range(fire, 40.0)
 		_finish(instant)
@@ -521,9 +583,12 @@ func _finish(instant: bool) -> void:
 	mountain_exit.enabled = true
 	if instant:
 		f.reach = beacon_reach
-		_head_climb = 800.0
+		_head_climb = CLIMB_TOP
+		Look.light_beacon(_tower, true)
 		return
 	beacon_lit.emit()
+	_sound(&"play", [&"ink_ember_take"])
+	get_tree().create_timer(1.6).timeout.connect(func(): _sound(&"play", [&"mend"]))
 	# Mending the lake: Room.complete() hands him the ember (gives_ink) and the region's
 	# television closes its eyes. The brand now rides in his carry slot, so the one in
 	# his hand goes out of this room's hands and into the story's.
@@ -533,23 +598,41 @@ func _finish(instant: bool) -> void:
 	Look.puff(self, beacon_spot.global_position + Vector3.UP * 2.5, 90, 3.0)
 	f.fire.scale = Vector3.ONE * 0.1
 	create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT) \
-		.tween_property(f.fire, "scale", Vector3.ONE * 2.6, 1.2)
+		.tween_property(f.fire, "scale", Vector3.ONE * 1.8, 1.2)
+	_fire_climbs_the_tower()
 	Game.player.controls_enabled = false
+	revealing = true
 	var t := create_tween()
 	t.tween_interval(1.0)
 	t.tween_method(func(r): f.reach = r, 0.0, beacon_reach, 9.0).set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
 	var c := create_tween()
 	c.tween_interval(4.0)
-	c.tween_property(self, "_head_climb", 800.0, 10.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	c.tween_callback(func(): _sound(&"giant", [&"giant_groan", HEAD_CENTER + Vector3(0, 1500, 0), 3000.0]))
+	c.tween_property(self, "_head_climb", CLIMB_TOP, 11.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	if is_instance_valid(Game.camera):
 		# Stand back over the sea, low, and look up at the mountain as the light climbs it.
 		var b := beacon_spot.global_position
-		var look := HEAD_CENTER + Vector3(0, 260, 0)
-		await Game.camera.play_shot(b + Vector3(90, 70, 620), look, 13.0, 4.0)
-	else:
+		var look := HEAD_CENTER + Vector3(0, 1500, 0)
+		await Game.camera.play_shot(b + Vector3(160, 140, 1000), look, 14.0, 4.0)
+	if c.is_running():
 		await c.finished
+	revealing = false
 	if is_instance_valid(Game.player):
 		Game.player.controls_enabled = true
+
+
+## The flame runs up the tower's stair to the bowl 118 m up, then the bowl catches.
+func _fire_climbs_the_tower() -> void:
+	var steps := 24
+	for i in steps:
+		var t := float(i) / (steps - 1)
+		var a := t * TAU * 3.5 + PI * 0.5
+		var r := lerpf(14.0, 6.0, t)
+		var p := _tower.global_position + Vector3(cos(a) * r, lerpf(TOWER_STEP_Y + 1.0, 116.0, t), sin(a) * r)
+		get_tree().create_timer(0.6 + t * 3.2).timeout.connect(func(): Look.puff(self, p, 14, 2.0))
+	get_tree().create_timer(4.0).timeout.connect(func():
+		Look.puff(self, _tower.global_position + Vector3(0, 118, 0), 120, 6.0)
+		Look.light_beacon(_tower, false))
 
 
 func _spin_beams(delta: float) -> void:
@@ -619,6 +702,7 @@ func _drown() -> void:
 		sink.tween_property(torch, "global_position:y", torch.global_position.y - 1.5, 0.6)
 		sink.tween_callback(func(): torch.visible = false)
 	Look.ripple(self, Vector3(pl.global_position.x, -0.3, pl.global_position.z), 2.6)
+	_sound(&"play", [&"rewind"])
 	var t := create_tween()
 	t.tween_property(_fade, "modulate:a", 1.0, 0.6)
 	await t.finished
@@ -631,6 +715,7 @@ func _drown() -> void:
 		Game.camera.face_toward(_landmark.global_position)
 		Game.camera.snap_to_target()
 	await get_tree().create_timer(0.4).timeout
+	_sound(&"play", [&"wake"])
 	var back := create_tween()
 	back.tween_property(_fade, "modulate:a", 0.0, 0.9)
 	pl.controls_enabled = true
@@ -639,3 +724,55 @@ func _drown() -> void:
 
 static func _flat_dist(a: Vector3, b: Vector3) -> float:
 	return Vector2(a.x - b.x, a.z - b.z).length()
+
+
+# --- Sound --------------------------------------------------------------------------------
+# The sound system lives in its own branch until it merges, so every call is soft: with no
+# Sound autoload (or no library), the room is simply silent.
+
+func _sound_node() -> Node:
+	return get_node_or_null(^"/root/Sound")
+
+
+func _sound(method: StringName, args: Array) -> void:
+	var snd := _sound_node()
+	if snd and snd.has_method(method):
+		snd.callv(method, args)
+
+
+func _add_room_audio() -> void:
+	if not ResourceLoader.exists("res://audio/room_audio.gd"):
+		return
+	var ra: Node = load("res://audio/room_audio.gd").new()
+	ra.name = "RoomAudio"
+	ra.set(&"bed", &"bed_lake")
+	ra.set(&"surface", &"stone")
+	ra.set(&"lateness", 1.5)
+	add_child(ra)
+
+
+## Wet steps at the very edge of the near shore and in the shallows; stone everywhere else.
+func _set_surface_resolver() -> void:
+	var snd := _sound_node()
+	if snd and &"surface_resolver" in snd:
+		snd.set(&"surface_resolver", func(pos: Vector3) -> StringName:
+			return &"water" if pos.y < -0.05 or (pos.z > -0.5 and pos.z < 1.6) else &"stone")
+
+
+func _add_fire_loop(at: Node3D, volume_db: float) -> void:
+	var snd := _sound_node()
+	if not snd or not snd.has_method(&"get_loop"):
+		return
+	var stream: AudioStream = snd.call(&"get_loop", &"fire_loop")
+	if stream == null:
+		return
+	var p := AudioStreamPlayer3D.new()
+	p.name = "FireLoop"
+	p.stream = stream
+	p.bus = &"Near"
+	p.volume_db = volume_db
+	p.unit_size = 6.0
+	p.max_distance = 60.0
+	p.position.y = 0.6
+	at.add_child(p)
+	p.play()

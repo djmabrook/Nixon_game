@@ -11,6 +11,13 @@ extends RefCounted
 const FireScript := preload("res://rooms/lakeside/fire.gd")
 const WaterShader := preload("res://rooms/lakeside/water.gdshader")
 const LightboundShader := preload("res://rooms/lakeside/lightbound.gdshader")
+const HouseScene := preload("res://rooms/lakeside/art/lake_house.glb")
+const BoatScene := preload("res://rooms/lakeside/art/rowing_boat.glb")
+const BareTreeScene := preload("res://rooms/lakeside/art/bare_tree.glb")
+const BeaconScene := preload("res://rooms/lakeside/art/lake_beacon.glb")
+const BeaconLitScene := preload("res://rooms/lakeside/art/lake_beacon_lit.glb")
+const BrandScene := preload("res://props/carry/ember_brand.glb")
+const BustScene := preload("res://rooms/lakeside/art/watcher_bust_v2.glb")
 
 const INK := Color(0.03, 0.03, 0.035)
 const STONE := Color(0.62, 0.62, 0.6)
@@ -87,6 +94,23 @@ class Lightbound extends RefCounted:
 ## `climb` makes it follow the light climbing the mountain instead; `invert` flips that.
 static func lb(set: Lightbound, m: Mesh, tint: Color, pos: Vector3, parent: Node3D, sink := 0.0, climb := 0.0, invert := 0.0) -> MeshInstance3D:
 	return mesh(m, set.get_material(tint, sink, climb, invert), pos, parent)
+
+
+## Every mesh under `root` drawn with one lightbound look, so a model exists only in firelight.
+static func make_lightbound(root: Node, set: Lightbound, tint: Color, sink := 0.0) -> void:
+	for m in root.find_children("*", "MeshInstance3D", true, false):
+		(m as MeshInstance3D).material_override = set.get_material(tint, sink, 0.0, 0.0)
+
+
+## Emissive surfaces of a model ignore fog, so its fire reads from kilometres away.
+static func unfog_glow(root: Node) -> void:
+	for m: MeshInstance3D in root.find_children("*", "MeshInstance3D", true, false):
+		for i in m.mesh.get_surface_count():
+			var mt := m.mesh.surface_get_material(i) as BaseMaterial3D
+			if mt and mt.emission_enabled:
+				var d := mt.duplicate() as BaseMaterial3D
+				d.disable_fog = true
+				m.set_surface_override_material(i, d)
 
 
 static func box(size: Vector3) -> BoxMesh:
@@ -187,10 +211,10 @@ static func dress_night(room: Node3D) -> void:
 
 static func make_lake(parent: Node3D) -> MeshInstance3D:
 	var water := PlaneMesh.new()
-	water.size = Vector2(5000, 5000)
+	water.size = Vector2(12000, 12000)
 	var wm := ShaderMaterial.new()
 	wm.shader = WaterShader
-	var lake := mesh(water, wm, Vector3(0, -0.32, -800), parent)
+	var lake := mesh(water, wm, Vector3(0, -0.32, -2500), parent)
 	lake.name = "Lake"
 	lake.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return lake
@@ -232,6 +256,7 @@ static func foam_ring(parent: Node3D, center: Vector3, radius: float, seed_value
 
 # --- Land ------------------------------------------------------------------------------
 
+## The cottage: the only normal-sized thing in the region. Its door faces local +Z.
 static func build_house(parent: Node3D, at: Vector3) -> Node3D:
 	var house := StaticBody3D.new()
 	house.name = "House"
@@ -239,25 +264,80 @@ static func build_house(parent: Node3D, at: Vector3) -> Node3D:
 	parent.add_child(house)
 	var shape := CollisionShape3D.new()
 	var bs := BoxShape3D.new()
-	bs.size = Vector3(4.0, 4.0, 4.0)
+	bs.size = Vector3(6.6, 6.0, 5.2)
 	shape.shape = bs
-	shape.position.y = 2.0
+	shape.position.y = 3.0
 	house.add_child(shape)
-	var white := mat(BONE)
-	var ink := mat(INK)
-	mesh(box(Vector3(4.0, 2.8, 4.0)), white, Vector3(0, 1.4, 0), house)
-	var roof := PrismMesh.new()
-	roof.size = Vector3(4.8, 2.0, 4.6)
-	mesh(roof, ink, Vector3(0, 3.8, 0), house)
-	mesh(box(Vector3(0.55, 1.5, 0.55)), ink, Vector3(1.2, 4.3, 0.8), house)
-	mesh(box(Vector3(1.1, 2.1, 0.08)), ink, Vector3(0, 1.05, 2.02), house)
-	for x in [-1.3, 1.3]:
-		mesh(box(Vector3(0.6, 0.6, 0.06)), ink, Vector3(x, 1.75, 2.02), house)
-	mesh(box(Vector3(0.06, 0.6, 0.6)), ink, Vector3(2.02, 1.75, 0.4), house)
-	for i in 6:
-		mesh(box(Vector3(4.02, 0.03, 4.02)), ink, Vector3(0, 0.3 + i * 0.45, 0), house)
-	mesh(box(Vector3(1.6, 0.12, 0.8)), mat(ASH), Vector3(0, 0.06, 2.4), house)
+	house.add_child(HouseScene.instantiate())
 	return house
+
+
+static func make_boat(parent: Node3D, at: Vector3, yaw: float) -> void:
+	var boat := BoatScene.instantiate() as Node3D
+	boat.name = "RowingBoat"
+	boat.position = at
+	boat.rotation.y = yaw
+	parent.add_child(boat)
+
+
+## A bare tree, wider than it is tall, existing only in firelight.
+static func make_bare_tree(lbm: Lightbound, parent: Node3D, at: Vector3, yaw: float, size: float) -> void:
+	var tree := BareTreeScene.instantiate() as Node3D
+	tree.name = "BareTree"
+	tree.position = at
+	tree.rotation.y = yaw
+	tree.scale = Vector3.ONE * size
+	parent.add_child(tree)
+	make_lightbound(tree, lbm, Color(0.12, 0.12, 0.13))
+
+
+## The beacon: a 122 m iron lattice tower standing in the sea on a stepped stone footing
+## (top of the outer step at 2.2 m). Cold until lit; swap_beacon_lit() lights the bowl.
+static func build_beacon(parent: Node3D, at: Vector3) -> Node3D:
+	var root := Node3D.new()
+	root.name = "BeaconTower"
+	root.position = at
+	parent.add_child(root)
+	var cold := BeaconScene.instantiate() as Node3D
+	cold.name = "Cold"
+	root.add_child(cold)
+	var lit := BeaconLitScene.instantiate() as Node3D
+	lit.name = "Lit"
+	lit.visible = false
+	root.add_child(lit)
+	unfog_glow(lit)
+	# Collision from the model itself: the footing's steps, the legs, the stair.
+	for m: MeshInstance3D in cold.find_children("*", "MeshInstance3D", true, false):
+		m.create_trimesh_collision()
+	var light := OmniLight3D.new()
+	light.name = "BowlLight"
+	light.light_color = FIRE_LIGHT
+	light.light_energy = 0.0
+	light.omni_range = 220.0
+	light.omni_attenuation = 0.8
+	light.position = Vector3(0, 118, 0)
+	root.add_child(light)
+	return root
+
+
+static func light_beacon(tower: Node3D, instant: bool) -> void:
+	tower.get_node("Cold").visible = false
+	tower.get_node("Lit").visible = true
+	var light := tower.get_node("BowlLight") as OmniLight3D
+	if instant:
+		light.light_energy = 6.0
+	else:
+		tower.create_tween().tween_property(light, "light_energy", 6.0, 2.0)
+
+
+## A landing ramp from the water up onto the footing's outer step.
+static func boat_step(parent: Node3D, from: Vector3, to: Vector3, width: float) -> void:
+	var d := to - from
+	var length := d.length()
+	var basis := Basis.looking_at(d.normalized(), Vector3.UP)
+	var up := basis * Vector3.UP
+	box_body(parent, "BoatStep", Vector3(width, 0.6, length + 0.6),
+		Transform3D(basis, from + d * 0.5 - up * 0.3), Color(0.5, 0.5, 0.48))
 
 
 ## A pine that dwarfs the house. Lightbound: a dark forest you only see in passing.
@@ -432,45 +512,6 @@ static func wake_lighthouse(lh: Node3D) -> Node3D:
 	return pivot
 
 
-## The far shore: a ramp of pale stone rising 14 m to a plateau cut into the mountain's root.
-static func build_ascent(lbm: Lightbound, parent: Node3D, shore_z: float, top_y: float, ramp_len: float) -> void:
-	var run := ramp_len
-	var angle := atan2(top_y, run)
-	var length := sqrt(run * run + top_y * top_y)
-	var mid := Vector3(0, top_y * 0.5, shore_z - 4.0 - run * 0.5)
-	var basis := Basis(Vector3.RIGHT, angle)
-	var up := basis * Vector3.UP
-	box_body(parent, "Ramp", Vector3(9.0, 1.0, length), Transform3D(basis, mid - up * 0.5), Color(0.5, 0.5, 0.48))
-	# Steps drawn on the ramp so it reads as a stair at this scale.
-	var ink := mat(Color(0.3, 0.3, 0.29))
-	var steps := int(length / 0.9)
-	for i in steps:
-		var s := mesh(box(Vector3(9.02, 0.04, 0.12)), ink, Vector3.ZERO, parent)
-		s.transform = Transform3D(basis, mid + basis * Vector3(0, 0.0, length * 0.5 - (i + 0.5) * length / steps))
-	# The plateau and the cliff it sits on.
-	var plateau_z := shore_z - 4.0 - run
-	box_body(parent, "Plateau", Vector3(30.0, 1.0, 24.0),
-		Transform3D(Basis.IDENTITY, Vector3(0, top_y - 0.5, plateau_z - 12.0)), SHORE)
-	box_body(parent, "Cliff", Vector3(90.0, top_y + 24.0, 70.0),
-		Transform3D(Basis.IDENTITY, Vector3(0, (top_y + 24.0) * 0.5 - 10.5, plateau_z - 24.0 - 35.0)), ROCK)
-	for side in [-1.0, 1.0]:
-		box_body(parent, "RampWall", Vector3(30.0, top_y + 10.0, run + 6.0),
-			Transform3D(Basis.IDENTITY, Vector3(side * 19.5, (top_y + 10.0) * 0.5 - 10.5, shore_z - 4.0 - run * 0.5 + 1.0)), ROCK)
-	# Monoliths flank the climb and ring the plateau.
-	for i in 6:
-		var t := (i + 0.5) / 6.0
-		for side in [-1.0, 1.0]:
-			var p := Vector3(side * 5.6, top_y * t, shore_z - 4.0 - run * t)
-			var m := lb(lbm, box(Vector3(1.4, 9.0, 1.0)), STONE, p + Vector3(0, 4.5, 0), parent)
-			m.rotation.z = side * 0.04
-	for i in 10:
-		var a := PI + TAU * (i + 0.5) / 12.0
-		var p := Vector3(cos(a) * 12.0, top_y, plateau_z - 12.0 + sin(a) * 10.0)
-		if p.z > plateau_z - 1.5:
-			continue
-		lb(lbm, box(Vector3(1.8, 12.0, 1.2)), STONE, p + Vector3(0, 6.0, 0), parent).rotation.y = -a
-
-
 static func make_doorway(exit: Node3D) -> void:
 	var frame := Node3D.new()
 	frame.name = "Doorway"
@@ -569,9 +610,15 @@ static func make_fire_pit(great := false) -> Node3D:
 static func make_torch() -> Node3D:
 	var torch := Node3D.new()
 	torch.name = "Torch"
-	mesh(box(Vector3(0.07, 0.7, 0.07)), mat(INK), Vector3.ZERO, torch)
-	var flame := make_fire(0.42)
-	flame.position = Vector3(0, 0.32, 0)
+	var brand := BrandScene.instantiate() as Node3D
+	brand.position = Vector3(0, -0.16, 0)  # held at the grip
+	torch.add_child(brand)
+	# The model brings its own faceted flame; this adds the light and the embers.
+	var flame := make_fire(0.3)
+	flame.position = Vector3(0, 0.3, 0)
+	for c in flame.get_children():
+		if c.name.begins_with("Flame") or c is MeshInstance3D:
+			c.visible = false
 	torch.add_child(flame)
 	var light := flame.get_node("Light") as OmniLight3D
 	light.light_energy = 2.0

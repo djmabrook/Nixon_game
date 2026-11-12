@@ -18,6 +18,7 @@ uniform float always_real = 0.0;
 uniform float climb = 0.0;
 uniform float invert = 0.0;
 uniform float climb_y = 0.0;
+uniform float climb_band = 40.0;
 
 // xyz = world position, w = reach in metres (0 = off).
 uniform vec4 fire0;
@@ -60,7 +61,7 @@ void vertex() {
 void fragment() {
 	float a = sink > 0.0 ? origin_amount : max(amount(wpos), always_real);
 	if (climb > 0.0) {
-		a = 1.0 - smoothstep(climb_y - 40.0, climb_y, wpos.y);
+		a = 1.0 - smoothstep(climb_y - climb_band, climb_y, wpos.y);
 		a = mix(a, 1.0 - a, invert);
 	}
 	float th = bayer4(floor(FRAGCOORD.xy / 2.0));

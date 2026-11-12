@@ -27,7 +27,7 @@ script = ExtResource("1")
 camera_distance = 10.0
 camera_pitch_degrees = -16.0
 camera_fov = 50.0
-camera_far = 4000.0
+camera_far = 9000.0
 gives_ink = &"ember"
 
 [node name="Layout" type="Node3D" parent="."]
@@ -42,16 +42,16 @@ shape = SubResource("near_shape")
 mesh = SubResource("near_mesh")
 
 [node name="Landmark" type="Marker3D" parent="Layout"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 300, -1750)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1500, -4200)
 
 [node name="Campfire" type="Marker3D" parent="Layout"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.5, 0, 5)
 
 [node name="Beacon" type="Marker3D" parent="Layout"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 14, -1137.4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6, 2.2, -1100.6)
 
 [node name="from_hub" type="Marker3D" parent="Layout"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 11.6, 0, 18.6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.6, 0, 19)
 script = ExtResource("2")
 is_default = true
 
@@ -60,11 +60,11 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.5, 0, 3.4)
 script = ExtResource("2")
 
 [node name="plateau" type="Marker3D" parent="Layout"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 14, -1131)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, -1099.6)
 script = ExtResource("2")
 
 [node name="ExitToHub" type="Area3D" parent="Layout"]
-transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 10.4, 0, 20)
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 11.25, 0, 20)
 script = ExtResource("3")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Layout/ExitToHub"]
@@ -72,7 +72,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.2, 0)
 shape = SubResource("house_exit_shape")
 
 [node name="ExitMountain" type="Area3D" parent="Layout"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 14, -1148.8)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7, 2.2, -1100.9)
 script = ExtResource("3")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Layout/ExitMountain"]

@@ -26,6 +26,9 @@ func _ready() -> void:
 	_check(biggest >= 24.0, "a cathedral sphere exists (r = %.1f m)" % biggest)
 	_check(room.focus_target == room.moon and Game.camera.far >= 1000.0, "camera focus is the moon")
 	_check(not room.board.is_black_at(p.global_position), "spawn is on a pink tile")
+	_check(Sound.bed_id() == &"bed_checker" and Sound.surface == &"tile", "checker bed and tile footsteps")
+	await _frames(30)
+	_check(room._voice_balls.count(null) < room.VOICE_COUNT, "rolling voices follow the nearest big spheres")
 
 	# --- The tide rolls spheres toward the moon.
 	var ball = null
@@ -101,6 +104,7 @@ func _ready() -> void:
 	_check(room._footing > 0.9, "pink footing blooms")
 	_check(Game.carried == &"salmon", "he carries the salmon ink out")
 	_check(room.get_node("WatchingSet").mode == WatchingSet.Mode.CLOSED, "the watching set closes its eyes")
+	_check(not room.watching_set.broadcast.eyes_open, "its broadcast winds down")
 	_check(room._crater_exit != null and room._crater_exit.enabled, "an exit opens in the crater")
 
 	# --- Leave through the crater exit.

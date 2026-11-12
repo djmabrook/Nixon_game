@@ -26,8 +26,14 @@ moon, the Watcher's eye, hangs low and circles it, and "down" always points at t
 | `checker_sphere.gd` | A sphere: set `radius` (and `is_key`), and it builds its own mesh and collision |
 | `checker_floor.gdshader` | Filtered checker to the horizon, flow lines, ripple, pink footing |
 | `checker_sphere.gdshader`, `dream_sky.gdshader` | Sphere checker; the sky with the storm band and the moon eye |
-| `room_sfx.gd` | Synthesized placeholder sounds (no audio files); swap entries in `sounds` for real samples |
 | `tests/check_checkerboard.tscn` | Headless check of this room |
+
+**Sound** uses the shared `Sound` system (see `audio/AUDIO.md`). `RoomAudio` sets `bed_checker` (its
+tide breathes every 16 s) and hollow `tile` footsteps. The twelve nearest big spheres each get a
+`GiantVoice` (`sphere_roll_loop`, sized by diameter, louder with speed). Landings are `giant_settle`
+(`giant_boom` for cathedrals). The moon's warning and pull are `giant_groan` and `giant_rumble`
+from its side of the horizon. The socket plays `ink_salmon_take` with `mend`. The shared television brings
+its own broadcast, which powers off on the mend.
 
 The room gives the **salmon** ink (`gives_ink`), which he carries out to the hub. A shared
 watching television (`props/watching_set.tscn`) sits half buried near the entry and shuts its eyes

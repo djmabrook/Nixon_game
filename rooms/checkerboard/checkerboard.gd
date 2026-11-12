@@ -77,9 +77,15 @@ var _cam_base := 9.0
 var _balls: Array[Ball] = []
 var _sky_mat: ShaderMaterial
 var _crater_exit: Node3D
+## Rolling voices for the nearest big spheres (re-assigned a few times a second).
+var _voices: Array[GiantVoice] = []
+var _voice_balls: Array = []
+var _voice_timer := 0.0
+const VOICE_COUNT := 12
+const VOICE_MIN_RADIUS := 2.5
 
 @onready var board: Node3D = $Board
-@onready var sfx: Node = $Sfx
+@onready var watching_set: WatchingSet = $WatchingSet
 @onready var moon: Node3D = $Moon
 @onready var moon_light: DirectionalLight3D = $MoonLight
 @onready var key_ball: Ball = $KeySphere
@@ -109,6 +115,15 @@ func _ready() -> void:
 	add_child(socket)
 	socket.global_position = board.socket_center() + Vector3(0, -board.pit_depth + 0.7, 0)
 	socket.body_entered.connect(_on_socket_body_entered)
+
+	for i in VOICE_COUNT:
+		var v := GiantVoice.new()
+		v.sound_id = &"sphere_roll_loop"
+		v.intensity = 0.0
+		v.name = "RollVoice%d" % i
+		add_child(v)
+		_voices.append(v)
+		_voice_balls.append(null)
 
 	_sky_mat = ShaderMaterial.new()
 	_sky_mat.shader = SKY_SHADER
@@ -197,11 +212,12 @@ func _advance_phase(delta: float) -> void:
 				_moon_from = _moon_az
 				_moon_to = _moon_az + randf_range(deg_to_rad(70), deg_to_rad(140)) * (1.0 if randf() < 0.5 else -1.0)
 				_enter_phase(Phase.WARN, warn_time)
-				sfx.play(&"warn", -6.0)
+				# The eye groans as it comes round, far off and late.
+				Sound.giant(&"giant_groan", _horizon_point(_moon_to), 200.0)
 		Phase.WARN:
 			_moon_az = _moon_to
 			_enter_phase(Phase.PULL, pull_time)
-			sfx.play(&"surge", 0.0)
+			Sound.giant(&"giant_rumble", _horizon_point(_moon_az), 200.0)
 			_shake = maxf(_shake, 0.45)
 		Phase.PULL, Phase.LIFT:
 			_enter_phase(Phase.CALM, calm_time)
@@ -246,6 +262,46 @@ func _physics_process(delta: float) -> void:
 	_update_balls(tide, delta)
 	_update_player(tide, delta)
 	_update_camera(delta)
+	_update_voices(delta)
+
+
+## A point on the horizon toward a bearing, for sounds that come from the moon's side.
+func _horizon_point(az: float) -> Vector3:
+	return Game.player.global_position + Vector3(cos(az), 0.15, sin(az)) * 250.0
+
+
+func _update_voices(delta: float) -> void:
+	var p := Game.player.global_position
+	_voice_timer -= delta
+	if _voice_timer <= 0.0:
+		_voice_timer = 0.4
+		var big: Array = []
+		for b in _balls:
+			if b.radius >= VOICE_MIN_RADIUS and not b.socketed:
+				big.append(b)
+		big.sort_custom(func(a, b): return a.global_position.distance_squared_to(p) - a.radius * a.radius < b.global_position.distance_squared_to(p) - b.radius * b.radius)
+		var nearest := big.slice(0, VOICE_COUNT)
+		# Keep voices on spheres that are still near; hand free voices to the newcomers.
+		for i in VOICE_COUNT:
+			if _voice_balls[i] != null and not nearest.has(_voice_balls[i]):
+				_voice_balls[i] = null
+		for b in nearest:
+			if _voice_balls.has(b):
+				continue
+			var slot := _voice_balls.find(null)
+			if slot < 0:
+				break
+			_voice_balls[slot] = b
+			_voices[slot].size_m = b.radius * 2.0
+	for i in VOICE_COUNT:
+		var v := _voices[i]
+		var b = _voice_balls[i]
+		if b == null:
+			v.intensity = 0.0
+			continue
+		v.global_position = b.global_position
+		var rolling := 0.0 if b.global_position.y > b.radius + 0.5 else 1.0
+		v.intensity = clampf(b.linear_velocity.length() / 6.0, 0.0, 1.0) * rolling
 
 
 func _update_moon(delta: float) -> void:
@@ -295,7 +351,6 @@ func _update_world(delta: float) -> void:
 	_sky_mat.set_shader_parameter(&"warn", _warn)
 	_sky_mat.set_shader_parameter(&"moon_glow", 0.4 + _strength * 0.9 + _warn * 0.4)
 	_sky_mat.set_shader_parameter(&"bloom", _bloom)
-	sfx.set_drone(maxf(_strength, _warn * 0.25))
 
 	# Wind streaks blow toward the moon while it pulls.
 	var p := Game.player
@@ -423,7 +478,7 @@ func _update_player(tide: Vector3, delta: float) -> void:
 		if along < want:
 			b.apply_central_impulse(n * (want - along) * b.mass * push_strength * minf(1.0, 1.2 / b.radius))
 			if _push_cooldown <= 0.0:
-				sfx.play(&"push", -10.0, clampf(0.8 / b.radius, 0.4, 2.0))
+				Sound.play_at(&"hand_touch", c.get_position())
 				_push_cooldown = 0.25
 
 	# Lean into the pull, like walking in wind.
@@ -458,7 +513,7 @@ func _update_camera(delta: float) -> void:
 # --- Events -----------------------------------------------------------------
 
 func _on_lift_started() -> void:
-	sfx.play(&"lift", -2.0)
+	Sound.giant(&"giant_rumble", Game.player.global_position + Vector3(0, 30, 0), 300.0)
 	_lifts_seen += 1
 	if _lifts_seen == 1 and is_instance_valid(Game.camera) and not Game.camera.is_in_shot():
 		# The vista: low behind him, looking up as the plain rises into the sky.
@@ -476,10 +531,11 @@ func _on_lift_started() -> void:
 
 func _on_ball_hit(speed: float, ball: Ball) -> void:
 	var near := Game.player.global_position.distance_to(ball.global_position) - ball.radius if is_instance_valid(Game.player) else 100.0
-	var vol := linear_to_db(clampf(speed / 9.0, 0.05, 1.0)) - near * 0.15 + clampf(ball.radius, 0.0, 12.0)
-	if vol < -40.0:
+	# Small things are left to the bed; anything man-sized or bigger lands audibly, late.
+	if ball.radius < 0.8 or near > 40.0 + ball.radius * 12.0:
 		return
-	sfx.play(&"thunk", minf(vol, 6.0), clampf(0.9 / sqrt(ball.radius), 0.2, 2.0))
+	var vol := linear_to_db(clampf(speed / 9.0, 0.1, 1.0))
+	Sound.giant(&"giant_boom" if ball.radius > 20.0 else &"giant_settle", ball.global_position, ball.radius * 2.0, vol)
 	if ball.radius > 6.0 and speed > 3.0 and near < 40.0:
 		_shake = maxf(_shake, 0.6 * (1.0 - near / 40.0))
 
@@ -508,8 +564,9 @@ func _on_socket_body_entered(body: Node3D) -> void:
 	_bloom = 1.0
 	_drift = Vector3.ZERO
 	_trail.fill(Game.player.global_position)
-	sfx.play(&"socket", 0.0)
-	sfx.play(&"touchdown", -2.0)
+	Sound.play(&"ink_salmon_take")
+	Sound.play(&"mend")
+	Sound.giant(&"giant_boom", board.socket_center(), 300.0)
 	complete()
 	_open_crater_exit.call_deferred(true)
 	# Watch the eye close and set.
@@ -550,7 +607,6 @@ func _respawn_ball(b: Ball) -> void:
 	b.linear_velocity = Vector3.ZERO
 	b.angular_velocity = Vector3.ZERO
 	b.global_position = b.home + Vector3(0, 12.0 + b.radius, 0)
-	sfx.play(&"respawn", -12.0)
 
 
 func _respawn_player() -> void:
@@ -559,4 +615,5 @@ func _respawn_player() -> void:
 	p.velocity = Vector3.ZERO
 	_drift = Vector3.ZERO
 	p.global_position = spawn.global_position if spawn else global_position
-	sfx.play(&"respawn", -6.0)
+	Sound.play(&"rewind")
+	get_tree().create_timer(0.6).timeout.connect(func(): Sound.play(&"wake"))

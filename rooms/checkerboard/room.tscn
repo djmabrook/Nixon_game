@@ -5,7 +5,7 @@
 [ext_resource type="Script" path="res://core/room_exit.gd" id="3"]
 [ext_resource type="Script" path="res://rooms/checkerboard/board.gd" id="4"]
 [ext_resource type="Script" path="res://rooms/checkerboard/checker_sphere.gd" id="5"]
-[ext_resource type="Script" path="res://rooms/checkerboard/room_sfx.gd" id="6"]
+[ext_resource type="Script" path="res://audio/room_audio.gd" id="6"]
 [ext_resource type="Script" path="res://core/vista_zone.gd" id="7"]
 [ext_resource type="PackedScene" path="res://props/watching_set.tscn" id="8"]
 
@@ -160,5 +160,9 @@ visibility_aabb = AABB(-60, -20, -60, 120, 40, 120)
 process_material = SubResource("wind_pm")
 draw_pass_1 = SubResource("wind_mesh")
 
-[node name="Sfx" type="Node" parent="."]
+[node name="RoomAudio" type="Node" parent="."]
 script = ExtResource("6")
+bed = &"bed_checker"
+surface = &"tile"
+far_room_size = 1.0
+far_wet = 0.35

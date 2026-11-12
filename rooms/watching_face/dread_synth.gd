@@ -53,7 +53,7 @@ func _process(_delta: float) -> void:
 	if frames <= 0:
 		return
 	var dt := 1.0 / RATE
-	var target_level := 0.06 + 0.22 * motion + 0.08 * proximity
+	var target_level := 0.03 + 0.3 * motion * (0.25 + 0.75 * proximity) + 0.06 * proximity
 	var beat_hz := 0.9 + 1.8 * stare
 	var buf := PackedVector2Array()
 	buf.resize(frames)

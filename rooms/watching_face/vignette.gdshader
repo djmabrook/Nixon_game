@@ -1,10 +1,10 @@
 shader_type canvas_item;
-// Darkens the screen edges and bleeds them toward red while the face stares.
+// Darkens the screen edges, and closes in while the face stares (ink draining toward black).
 // `flash` is a brief white-pink pop used for the reveal sting and the catch.
 
 uniform float stare = 0.0;
 uniform float flash = 0.0;
-uniform vec4 tint : source_color = vec4(0.55, 0.0, 0.18, 1.0);
+uniform vec4 tint : source_color = vec4(0.06, 0.02, 0.05, 1.0);
 
 void fragment() {
 	vec2 uv = UV - 0.5;

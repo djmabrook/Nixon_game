@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="DitherLookSettings" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://shaders/dither_look_settings.gd" id="1_settings"]
+
+[resource]
+resource_name = "negative"
+script = ExtResource("1_settings")
+palette = PackedColorArray(0.04314, 0.03922, 0.04706, 1, 0.1647, 0.1569, 0.149, 1, 0.3608, 0.349, 0.3216, 1, 0.6392, 0.6157, 0.5647, 1, 0.9098, 0.8863, 0.8314, 1, 0.9647, 0.949, 0.9098, 1)
+virtual_height = 180
+dither_spread = 0.35
+bayer_size = 2
+accent_threshold = 0.0
+contrast = 1.6
+brightness = 0.0
+saturation = 0.0
+grain = 0.1
+soft_sampling = true
+invert = true
+haze_steps = 3
+haze_color = Color(0.92, 0.9, 0.85, 1)
+haze_start = 20.0
+haze_end = 1200.0
+haze_amount = 0.9
+outline_strength = 1.0
+outline_color = Color(0.05, 0.05, 0.06, 1)
+outline_min_distance = 15.0

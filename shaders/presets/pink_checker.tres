@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="DitherLookSettings" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://shaders/dither_look_settings.gd" id="1_settings"]
+
+[resource]
+resource_name = "pink_checker"
+script = ExtResource("1_settings")
+palette = PackedColorArray(0.07059, 0.09804, 0.02353, 1, 0.1922, 0.149, 0.0549, 1, 0.3647, 0.2157, 0.1098, 1, 0.6118, 0.2941, 0.1961, 1, 0.8588, 0.3647, 0.2941, 1, 0.9176, 0.4431, 0.4039, 1, 0.9059, 0.5882, 0.5294, 1, 0.898, 0.7412, 0.6745, 1)
+virtual_height = 180
+dither_spread = 0.3
+bayer_size = 3
+accent_threshold = 0.0
+contrast = 1.1
+brightness = 0.0
+saturation = 1.0
+grain = 0.35
+soft_sampling = true

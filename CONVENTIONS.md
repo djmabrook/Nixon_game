@@ -21,6 +21,7 @@ dither look over everything. Keep it original: our own places, shapes and palett
 | `rooms/_template/` | Copy this to start a room. Never loaded by the game | foundation |
 | `props/` | Shared props: `watching_set.tscn`, carried-ink objects in `props/carry/<ink>.tscn` | foundation + art |
 | `boss/` | The face that moves only when unwatched | boss thread |
+| `companions/` | The Stray (`companions/stray/stray.tscn`): drop it in any room. See its README | stray thread |
 | `shaders/` | Dither / pixel post-process and shared shaders | shader thread |
 | `art/` | Shared sprites, textures, palettes | sprites thread |
 | `tools/` | Dev scripts and the smoke test | anyone |

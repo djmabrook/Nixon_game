@@ -22,6 +22,7 @@ uniform vec4 shape_a = vec4(4.0, 1.0, 3.0, 0.0);
 // x = contrast, y = brightness, z = saturation, w = grain
 uniform vec4 grade_a = vec4(1.0, 0.0, 1.0, 0.0);
 uniform bool soft_a = true;
+uniform bool invert_a = false;
 
 // ---- Look B ----
 uniform sampler2D palette_b : filter_nearest, repeat_disable;
@@ -29,6 +30,7 @@ uniform int palette_size_b = 2;
 uniform vec4 shape_b = vec4(4.0, 1.0, 3.0, 0.0);
 uniform vec4 grade_b = vec4(1.0, 0.0, 1.0, 0.0);
 uniform bool soft_b = true;
+uniform bool invert_b = false;
 
 uniform float blend : hint_range(0.0, 1.0) = 0.0;
 // 0 = dissolve through the dither pattern, 1 = eyelids closing (top and bottom lids meet in
@@ -94,14 +96,15 @@ vec3 sample_block(vec2 block_origin_px, float px, vec2 screen_px, bool soft) {
 	return c * 0.25;
 }
 
-vec3 run_look(vec2 frag_px, vec2 screen_px, sampler2D pal, int pal_size, vec4 shape, vec4 grd, bool soft) {
+vec3 run_look(vec2 frag_px, vec2 screen_px, sampler2D pal, int pal_size, vec4 shape, vec4 grd, bool soft, bool inv) {
 	float px = max(1.0, shape.x);
 	vec2 world_px = frag_px + grid_offset;
 	ivec2 cell = ivec2(floor(world_px / px));
 	vec2 origin = vec2(cell) * px - grid_offset;
 	ivec2 dc = cell;
 
-	vec3 src = grade(sample_block(origin, px, screen_px, soft), grd);
+	vec3 raw = sample_block(origin, px, screen_px, soft);
+	vec3 src = grade(inv ? vec3(1.0) - raw : raw, grd);
 	float src_sat = saturation_of(src);
 
 	float t = bayer(dc, int(shape.z)) - 0.5;
@@ -151,9 +154,9 @@ void fragment() {
 	} else {
 		vec3 out_c;
 		if (blend <= 0.0) {
-			out_c = run_look(frag_px, screen_px, palette_a, palette_size_a, shape_a, grade_a, soft_a);
+			out_c = run_look(frag_px, screen_px, palette_a, palette_size_a, shape_a, grade_a, soft_a, invert_a);
 		} else if (blend >= 1.0) {
-			out_c = run_look(frag_px, screen_px, palette_b, palette_size_b, shape_b, grade_b, soft_b);
+			out_c = run_look(frag_px, screen_px, palette_b, palette_size_b, shape_b, grade_b, soft_b, invert_b);
 		} else {
 			// Dissolve through the dither pattern on the coarser of the two grids.
 			float px = max(shape_a.x, shape_b.x);
@@ -176,9 +179,9 @@ void fragment() {
 				to_b = lid + (th - 0.5) * 0.12 < open_h;
 			}
 			if (to_b) {
-				out_c = run_look(frag_px, screen_px, palette_b, palette_size_b, shape_b, grade_b, soft_b);
+				out_c = run_look(frag_px, screen_px, palette_b, palette_size_b, shape_b, grade_b, soft_b, invert_b);
 			} else {
-				out_c = run_look(frag_px, screen_px, palette_a, palette_size_a, shape_a, grade_a, soft_a);
+				out_c = run_look(frag_px, screen_px, palette_a, palette_size_a, shape_a, grade_a, soft_a, invert_a);
 			}
 		}
 		COLOR = vec4(out_c, 1.0);

@@ -263,6 +263,7 @@ func _apply_side(side: StringName, s: DitherLookSettings) -> void:
 	_mat.set_shader_parameter(&"shape_" + side, Vector4(_pixel_size_for(s), s.dither_spread, s.bayer_size, s.accent_threshold))
 	_mat.set_shader_parameter(&"grade_" + side, Vector4(s.contrast, s.brightness, s.saturation, s.grain))
 	_mat.set_shader_parameter(&"soft_" + side, s.soft_sampling)
+	_mat.set_shader_parameter(&"invert_" + side, s.invert)
 
 
 func _refresh_pixel_sizes() -> void:

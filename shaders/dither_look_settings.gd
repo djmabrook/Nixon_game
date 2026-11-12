@@ -61,6 +61,11 @@ extends Resource
 	set(v):
 		soft_sampling = v
 		emit_changed()
+## Photographic negative before quantising: light becomes dark, shadows read as solid ink.
+@export var invert: bool = false:
+	set(v):
+		invert = v
+		emit_changed()
 
 
 @export_group("Depth haze (3D)")

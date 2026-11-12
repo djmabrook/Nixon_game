@@ -3,7 +3,7 @@ extends Node3D
 ## (Shadow of the Colossus style): a huge plain, a ring of mountains lost in haze,
 ## a stone colossus, ruins and the little man.
 ##
-## Keys: 1-5 switch looks, B blink (eyelids), F hold to drain colour (stare), 0 toggles the effect, S toggles stabilize, WASD walk,
+## Keys: 1-8 switch looks, B blink (eyelids), F hold to drain colour (stare), 0 toggles the effect, S toggles stabilize, WASD walk,
 ## arrows or mouse drag orbit the camera, Q/E zoom.
 ## Screenshots / motion test:
 ##   godot --path . res://shaders/demo/vast_demo.tscn -- --shots=/some/dir
@@ -15,6 +15,9 @@ const LOOKS := [
 	preload("res://shaders/presets/dawn.tres"),
 	preload("res://shaders/presets/paper_margin.tres"),
 	preload("res://shaders/presets/lakeside_1bit.tres"),
+	preload("res://shaders/presets/negative.tres"),
+	preload("res://shaders/presets/hub_inks_0.tres"),
+	preload("res://shaders/presets/hub_inks_3.tres"),
 ]
 
 var dither: DitherLook
@@ -51,7 +54,7 @@ func _ready() -> void:
 func _unhandled_input(e: InputEvent) -> void:
 	if e is InputEventKey and e.pressed and not e.echo:
 		var k: int = e.keycode
-		if k >= KEY_1 and k <= KEY_5:
+		if k >= KEY_1 and k <= KEY_8:
 			dither.transition_to(LOOKS[k - KEY_1], 0.8)
 		elif k == KEY_0:
 			dither.enabled = not dither.enabled

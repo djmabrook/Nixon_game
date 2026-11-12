@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="DitherLookSettings" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://shaders/dither_look_settings.gd" id="1_settings"]
+
+[resource]
+resource_name = "hub_inks_0"
+script = ExtResource("1_settings")
+palette = PackedColorArray(0.01569, 0.007843, 0.007843, 1, 0.9451, 0.9176, 0.8471, 1, 0.9059, 0.6863, 0.5647, 1, 0.8235, 0.5725, 0.451, 1, 0.7255, 0.451, 0.3373, 1, 0.6157, 0.3294, 0.2314, 1)
+virtual_height = 180
+dither_spread = 0.22
+bayer_size = 2
+accent_threshold = 0.0
+contrast = 1.1
+brightness = 0.0
+saturation = 1.2
+grain = 0.0
+soft_sampling = true

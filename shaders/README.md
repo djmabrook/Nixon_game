@@ -43,6 +43,7 @@ Duplicate a preset in `presets/` (or New Resource → `DitherLookSettings`) into
 | `contrast` / `brightness` / `saturation` | Grade before the palette is applied. |
 | `grain` | Static, world-anchored noise in the threshold. Paper/film texture, never flickers. |
 | `soft_sampling` | Averages each virtual pixel (calm). Off = crisper thin lines (grids). |
+| `invert` | Photographic negative before the palette (light becomes dark). |
 | `haze_steps` … `haze_sky` | Depth haze as a few flat layers instead of smooth fog, spaced logarithmically from `haze_start` to `haze_end` (metres), stepping toward `haze_color`. A far mountain sits behind several clear sheets of air. |
 | `outline_*` | Ink line around things standing in front of much more distant things (a colossus against the sky, a ridge against the next ridge). Only past `outline_min_distance`, so landmarks get it and props don't. |
 
@@ -54,6 +55,9 @@ Presets, each palette pulled from one of the reference stills:
 `lakeside_1bit`, `sand_spiral_16bit`, `y2k_red_grid`, `pink_checker`, `cloud_sky`, `purple_face_grid`.
 For the open world: `colossus_haze` (pale stone and haze, 5 haze layers, ink silhouettes),
 `colossus_dusk`. For the ending: `dawn` (every ink at once) and `paper_margin` (bone white, almost empty).
+`negative` (inverted, shadows solid, bone rim on far silhouettes) for being turned to stone.
+`hub_inks_0` … `hub_inks_3`: the hub palette growing as inks come home (black, bone and sand first,
+then ember, salmon and crimson, each step adding a third of the teal and palm-green ramps).
 
 ## Story hooks
 
@@ -86,7 +90,7 @@ scenery instead of sitting on the screen, so the dither doesn't crawl ("shower d
 ## Demos
 
 - `shaders/demo/vast_demo.tscn` (F6): perspective orbit camera on a huge plain with a colossus,
-  ruins and a mountain ring. 1–5 looks, B blink, hold F to drain, S toggles stabilize,
+  ruins and a mountain ring. 1–8 looks, B blink, hold F to drain, S toggles stabilize,
   0 toggles the effect, WASD walk, arrows or mouse drag orbit, Q/E zoom.
   `-- --shots=DIR` and `-- --motion=DIR` save screenshots and the crawl test frames.
 - `shaders/demo/dither_demo.tscn` (F6): the original isometric scene with the six still-based

@@ -20,12 +20,16 @@ var room_id: StringName
 @export_group("Camera")
 ## Set false if the room brings its own Camera3D (call make_current() yourself).
 @export var use_default_camera := true
-## Orthographic size: how many world units fit vertically. Bigger = further out.
-@export var camera_size := 12.0
-## Rotation around the vertical axis. 45 is classic isometric.
-@export var camera_yaw_degrees := 45.0
-## Downward tilt. ~35.264 is true isometric; 30 is the 2:1 pixel-art look.
-@export var camera_pitch_degrees := 30.0
+## Orbit distance from the little man, in meters. Pull back for vast spaces.
+@export var camera_distance := 7.0
+## Starting downward tilt in degrees (negative looks down).
+@export var camera_pitch_degrees := -6.0
+## Field of view. Lower (35-50) flattens and makes distant landmarks loom.
+@export var camera_fov := 60.0
+## Draw distance in meters.
+@export var camera_far := 4000.0
+## The room's landmark. Holding `focus` turns the camera toward it.
+@export var focus_target: Node3D
 
 @export_group("Look")
 ## Background color shown where there is no geometry.
@@ -38,10 +42,13 @@ func _on_room_entered(_spawn: StringName) -> void:
 
 
 ## Lets a room tweak the default camera before it's made current.
-func configure_camera(cam: IsoCamera) -> void:
-	cam.size = camera_size
-	cam.yaw_degrees = camera_yaw_degrees
+## The spawn's facing has already set the yaw.
+func configure_camera(cam: FollowCamera) -> void:
+	cam.distance = camera_distance
 	cam.pitch_degrees = camera_pitch_degrees
+	cam.set_base_fov(camera_fov)
+	cam.far = camera_far
+	cam.focus_target = focus_target
 	RenderingServer.set_default_clear_color(clear_color)
 
 

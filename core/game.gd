@@ -12,13 +12,13 @@ const HUB_SCENE := "res://hub/hub.tscn"
 const ROOMS_DIR := "res://rooms"
 const ROOM_FILE := "room.tscn"
 const PLAYER_SCENE := preload("res://player/player.tscn")
-const CAMERA_SCENE := preload("res://camera/iso_camera.tscn")
+const CAMERA_SCENE := preload("res://camera/follow_camera.tscn")
 const FADE_TIME := 0.35
 
 ## The room currently loaded, the player inside it, and the camera following it.
 var current_room: Room
 var player: Player
-var camera: IsoCamera
+var camera: FollowCamera
 
 ## Room ids the player has finished (Room.complete()). The hub reads this.
 var completed_rooms: Dictionary = {}
@@ -107,13 +107,17 @@ func go_to(room_id: StringName, spawn: StringName = &"") -> void:
 	player = PLAYER_SCENE.instantiate()
 	room.add_child(player)
 	var marker := room.get_spawn(spawn)
-	player.global_transform = marker.global_transform if marker else room.global_transform
+	player.global_position = marker.global_position if marker else room.global_position
+	if marker:
+		player.face(-marker.global_basis.z)
 
 	if room.use_default_camera:
 		camera = CAMERA_SCENE.instantiate()
 		room.add_child(camera)
-		room.configure_camera(camera)
 		camera.target = player
+		if marker:
+			camera.yaw_degrees = marker.global_rotation_degrees.y
+		room.configure_camera(camera)
 		camera.snap_to_target()
 		camera.make_current()
 

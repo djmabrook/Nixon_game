@@ -24,6 +24,8 @@ signal watched_changed(watched: bool)
 signal revealed(distance: float)
 ## Fired when the face gains or loses line of sight to the player.
 signal sees_player_changed(sees: bool)
+## Fired when close_eyes() starts.
+signal eyes_closed
 
 @export_group("Hunt")
 ## Top speed while unseen, in m/s.
@@ -31,7 +33,7 @@ signal sees_player_changed(sees: bool)
 ## How fast it reaches top speed once you look away.
 @export var acceleration := 3.0
 ## Horizontal distance at which it has the player.
-@export var catch_radius := 270.0
+@export var catch_radius := 280.0
 ## Seconds after the room starts before it may move.
 @export var wake_delay := 2.0
 ## Set false to freeze it for good (after the room is won, in cutscenes).
@@ -47,18 +49,38 @@ signal sees_player_changed(sees: bool)
 @export var stare_rise := 1.2
 @export var stare_fall := 2.0
 
+@export_group("Model")
+## The Watcher's real model (origin at the base centre, front +Z). Empty = placeholder head.
+@export var model: PackedScene
+## Uniform scale for the model. watcher_bust_v2 is 12 m; 33.3 makes him about 450 m tall.
+@export var model_scale := 33.3
+## Stone eyelids, hinged on their origin: rotation.x 0 closed, -95 open.
+@export var eyelid_left: PackedScene
+@export var eyelid_right: PackedScene
+## Lid hinge positions in model-local units.
+@export var eyelid_left_pos := Vector3(0.9, 8.15, 0.95)
+@export var eyelid_right_pos := Vector3(-0.9, 8.15, 0.95)
+## Lid rotation.x when open.
+@export var eyelid_open_deg := -95.0
+## A camera-facing crimson glow on each eye so they pierce the dither from kilometres away.
+@export var eye_glow := true
+
 @export_group("Shape")
 ## Placeholder head scale (1 = a 6 m head). 90 makes it a mountain, about 550 m tall.
 @export var head_scale := 90.0
-## Head centre height when far away, and when it is right on top of him.
-@export var hover_far := 300.0
-@export var hover_near := 300.0
-## Horizontal distances between which it sinks from hover_far to hover_near.
-@export var sink_from := 1200.0
-@export var sink_to := 300.0
+## Height of the head's centre above whatever ground is under it. It rides the land:
+## over stairs, slopes and plains alike, so the chin always rests on the ground.
+@export var ride_height := 270.0
+## Give it a solid body (physics layer 4) so the little man can't walk through it.
+@export var solid := true
 ## Screen pixels a point must be inside the view before it counts as seen.
 @export var visible_margin_px := 4.0
 
+## Optional `func(x: float, z: float) -> float` giving the ground height under the face.
+## Without it the face raycasts layer 1, which also finds anything standing under it.
+var ground_provider: Callable
+## While true it cannot move even when unseen (a room sets it, e.g. inside firelight).
+var held := false
 ## True while the camera can see any part of the face.
 var is_watched := true
 ## True while the face has a clear line of sight to the player.
@@ -78,6 +100,12 @@ var _base_pupil_scale := Vector3.ONE
 var _faced_player := false
 var _bob_time := 0.0
 var _closed := false
+## Model mode: where the visibility samples centre (the head, not the base) and its radius.
+var _centre_offset := Vector3.ZERO
+var _model_radius := 0.0
+var _lids: Array[Node3D] = []
+var _glows: Array[Sprite3D] = []
+var _track_eyes := true
 
 @onready var visual: Node3D = $Visual
 
@@ -85,18 +113,25 @@ var _closed := false
 func _ready() -> void:
 	add_to_group(&"face_boss")
 	_awake_in = wake_delay
-	if visual.get_child_count() == 0:
+	if model:
+		_build_model()
+	elif visual.get_child_count() == 0:
 		_build_placeholder()
 		# Chin tipped down toward the floor, so the eyes meet the little man below.
 		visual.scale = Vector3.ONE * head_scale
 		visual.rotation_degrees.x = -14.0
-	for eye_name in [&"EyeL", &"EyeR"]:
-		var eye := visual.find_child(String(eye_name), true, false) as Node3D
-		if eye:
-			_eyes.append(eye)
+	if _eyes.is_empty():
+		for eye_name in [&"EyeL", &"EyeR"]:
+			var eye := visual.find_child(String(eye_name), true, false) as Node3D
+			if eye:
+				_eyes.append(eye)
+	if solid and not distant:
+		_add_body()
 	if distant:
 		active = false
 		set_physics_process(false)
+		for g in _glows:
+			g.modulate.a = 1.0
 		if _pupil_mat:
 			_pupil_mat.emission_energy_multiplier = 8.0
 			_pupil_mat.emission = Color(1.0, 0.05, 0.1)
@@ -106,17 +141,63 @@ func _ready() -> void:
 func close_eyes(time := 2.0) -> void:
 	active = false
 	_closed = true
+	for lid in _lids:
+		create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT) \
+				.tween_property(lid, "rotation_degrees:x", 0.0, time)
+	for g in _glows:
+		var gt := create_tween()
+		gt.tween_interval(time * 0.6)
+		gt.tween_property(g, "modulate:a", 0.0, time * 0.5)
 	for socket_name in [&"SocketL", &"SocketR"]:
 		var socket := visual.find_child(String(socket_name), true, false) as Node3D
-		if socket:
+		if socket == null:
+			continue
+		var lid := socket.get_node_or_null(^"Lid") as Node3D
+		if lid:
+			# The heavy lid slides down over the eye.
+			lid.visible = true
+			create_tween().set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN_OUT) \
+					.tween_property(lid, "position:y", 0.0, time)
+		else:
 			create_tween().set_trans(Tween.TRANS_SINE).tween_property(socket, "scale:y", 0.04, time)
 	if _pupil_mat:
-		create_tween().tween_property(_pupil_mat, "emission_energy_multiplier", 0.0, time * 0.5)
+		var t := create_tween()
+		t.tween_interval(time * 0.6)
+		t.tween_property(_pupil_mat, "emission_energy_multiplier", 0.0, time)
+	eyes_closed.emit()
+
+
+func _add_body() -> void:
+	var body := AnimatableBody3D.new()
+	body.name = "Body"
+	body.collision_layer = 1 << 3  # enemies
+	body.collision_mask = 0
+	body.sync_to_physics = false
+	var shape := CollisionShape3D.new()
+	if model:
+		var cyl := CylinderShape3D.new()
+		cyl.radius = _model_radius * 0.75
+		cyl.height = _centre_offset.y * 2.0
+		shape.shape = cyl
+		shape.position = Vector3(0, _centre_offset.y, 0)
+	else:
+		var sphere := SphereShape3D.new()
+		sphere.radius = 2.5 * head_scale
+		shape.shape = sphere
+	body.add_child(shape)
+	add_child(body)
 
 
 ## Rough radius of the head in metres, used for visibility samples.
 func head_radius() -> float:
+	if _model_radius > 0.0:
+		return _model_radius
 	return 2.8 * visual.scale.x
+
+
+## The middle of the head in world space (the model's origin is at its base).
+func centre() -> Vector3:
+	return global_position + _centre_offset
 
 
 func _physics_process(delta: float) -> void:
@@ -130,7 +211,7 @@ func _physics_process(delta: float) -> void:
 		_faced_player = true
 		var d := player.global_position - global_position
 		rotation.y = atan2(-d.x, -d.z)
-		global_position.y = _hover_for(player)
+		global_position.y = _ground_height() + ride_height
 	_update_watched(cam)
 	_update_sight(player, delta)
 	_track_with_eyes(player, delta)
@@ -140,7 +221,7 @@ func _physics_process(delta: float) -> void:
 		return
 
 	_awake_in -= delta
-	if is_watched or _awake_in > 0.0:
+	if is_watched or held or _awake_in > 0.0:
 		# The rule: when seen, it is a statue. No easing, no drift. It just stops.
 		_velocity = Vector3.ZERO
 		motion = 0.0
@@ -168,18 +249,25 @@ func retreat() -> void:
 ## Called by the room when the player is caught: the face drops onto him.
 func lunge(target: Vector3) -> void:
 	var t := create_tween().set_parallel().set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
-	var to := target + Vector3.UP * head_radius() * 0.4
+	var to := target + (Vector3.UP * head_radius() * 0.4 if model == null else Vector3.ZERO)
+	to.y = maxf(to.y, global_position.y - 40.0) if model else to.y
 	t.tween_property(self, "global_position", global_position.lerp(to, 0.8), 0.7)
 	t.tween_property(visual, "rotation_degrees:x", -35.0, 0.7)
 
 
-func _hover_for(player: Node3D) -> float:
-	var k := inverse_lerp(sink_to, sink_from, flat_distance_to(player.global_position))
-	return lerpf(hover_near, hover_far, clampf(k, 0.0, 1.0))
+## Height of the world (layer 1) under the face, or 0 if there is nothing there.
+func _ground_height() -> float:
+	if ground_provider.is_valid():
+		return ground_provider.call(global_position.x, global_position.z)
+	var top := Vector3(global_position.x, 5000.0, global_position.z)
+	var bottom := Vector3(global_position.x, -5000.0, global_position.z)
+	var query := PhysicsRayQueryParameters3D.create(top, bottom, 1)
+	var hit := get_world_3d().direct_space_state.intersect_ray(query)
+	return (hit.position as Vector3).y if not hit.is_empty() else 0.0
 
 
 func _update_watched(cam: Camera3D) -> void:
-	var c := global_position
+	var c := centre()
 	var r := head_radius() * 0.8
 	var right := cam.global_transform.basis.x * r
 	var up := cam.global_transform.basis.y * r
@@ -217,10 +305,10 @@ func _hunt(player: Player, delta: float) -> void:
 	if to_player.length() > 0.1:
 		var target_yaw := atan2(-to_player.x, -to_player.z)
 		rotation.y = lerp_angle(rotation.y, target_yaw, clampf(delta * 2.0, 0.0, 1.0))
-	# Sink lower as it closes in, with a slow, heavy bob. Also only while unseen.
+	# Ride the land with a slow, heavy heave. Also only while unseen.
 	_bob_time += delta
-	var goal_y := _hover_for(player) + sin(_bob_time * 1.3) * head_radius() * 0.04
-	global_position.y = move_toward(global_position.y, goal_y, chase_speed * 0.6 * delta)
+	var goal_y := _ground_height() + ride_height + sin(_bob_time * 1.3) * head_radius() * 0.03
+	global_position.y = move_toward(global_position.y, goal_y, chase_speed * delta)
 
 
 func _update_sight(player: Player, delta: float) -> void:
@@ -237,6 +325,10 @@ func _update_sight(player: Player, delta: float) -> void:
 
 	if _pupil_mat and not _closed:
 		_pupil_mat.emission_energy_multiplier = lerpf(IDLE_GLOW, 6.0, stare)
+	if not _closed:
+		for g in _glows:
+			g.modulate.a = lerpf(0.55, 1.0, stare)
+			g.pixel_size = lerpf(0.00003, 0.00006, stare)
 	for eye in _eyes:
 		var pupil := eye.get_child(0) as Node3D if eye.get_child_count() > 0 else null
 		if pupil:
@@ -245,6 +337,8 @@ func _update_sight(player: Player, delta: float) -> void:
 
 
 func _track_with_eyes(player: Player, delta: float) -> void:
+	if not _track_eyes:
+		return
 	var target := player.global_position + Vector3.UP * 0.8
 	for eye in _eyes:
 		var local := eye.get_parent_node_3d().to_local(target) - eye.position
@@ -260,57 +354,138 @@ func _eye_centre() -> Vector3:
 	return global_position
 
 
-# --- Placeholder head --------------------------------------------------------
-# An original caricature built from primitives: a long, heavy head with a
-# bulbous nose, low jowls, thick brows, and wide unblinking eyes. Front is -Z.
+# --- Real model -----------------------------------------------------------------
 
-const SKIN := Color(0.6, 0.5, 0.74)
-const SHADE := Color(0.4, 0.3, 0.55)
-const DARK := Color(0.10, 0.04, 0.16)
+func _build_model() -> void:
+	var m := model.instantiate() as Node3D
+	visual.add_child(m)
+	# Our front is -Z; the model faces +Z.
+	visual.rotation_degrees.y = 180.0
+	visual.scale = Vector3.ONE * model_scale
+	var aabb := AABB()
+	for mi in m.find_children("*", "MeshInstance3D", true, false):
+		var box := (mi as MeshInstance3D).get_aabb()
+		aabb = box if aabb.size == Vector3.ZERO else aabb.merge(box)
+	_centre_offset = Vector3(0, aabb.size.y * 0.5 * model_scale, 0)
+	_model_radius = maxf(aabb.size.x, aabb.size.y) * 0.5 * model_scale
+	_track_eyes = false
+	for eye_name in ["eye_L", "eye_R"]:
+		var eye := m.find_child(eye_name, true, false) as Node3D
+		if eye == null:
+			continue
+		_eyes.append(eye)
+		if eye_glow:
+			_glows.append(_add_glow(m, eye.position))
+	for pair in [[eyelid_left, eyelid_left_pos, "LidL"], [eyelid_right, eyelid_right_pos, "LidR"]]:
+		if pair[0] == null:
+			continue
+		var lid := (pair[0] as PackedScene).instantiate() as Node3D
+		lid.name = pair[2]
+		lid.position = pair[1]
+		lid.rotation_degrees.x = eyelid_open_deg
+		m.add_child(lid)
+		_lids.append(lid)
+
+
+## A soft crimson disc that always faces the camera and keeps the same size on screen.
+func _add_glow(parent: Node3D, at: Vector3) -> Sprite3D:
+	var grad := Gradient.new()
+	grad.set_color(0, Color(1.0, 0.25, 0.3, 1.0))
+	grad.set_color(1, Color(0.8, 0.0, 0.1, 0.0))
+	grad.add_point(0.25, Color(1.0, 0.1, 0.18, 0.9))
+	var tex := GradientTexture2D.new()
+	tex.gradient = grad
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	tex.width = 64
+	tex.height = 64
+	var s := Sprite3D.new()
+	s.texture = tex
+	s.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	s.fixed_size = true
+	s.pixel_size = 0.00003
+	s.shaded = false
+	s.double_sided = true
+	s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
+	s.transparent = true
+	s.modulate = Color(1, 1, 1, 0.55)
+	s.position = at + Vector3(0, 0, 0.12)
+	s.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(s)
+	return s
+
+
+# --- Placeholder head --------------------------------------------------------
+# An original caricature of a nameless official, after the art direction: shelf brow,
+# curtain jowls, mail-slot mouth, teacup-handle ears, target eyes. Built from primitives
+# so it can be replaced wholesale. Front is -Z; units are a 6 m head, scaled up.
+
+const STONE := Color(0.5, 0.46, 0.58)
+const SHADE := Color(0.42, 0.36, 0.52)
+const DARK := Color(0.08, 0.04, 0.12)
 const WHITE := Color(0.9, 0.86, 0.94)
-## The pupils always glow a little, so from far away the eyes read as two red lights.
-const IDLE_GLOW := 1.2
+## The target rings always glow a little, so from far away the eyes read as two red lights.
+const IDLE_GLOW := 2.5
 
 
 func _build_placeholder() -> void:
-	var skin := _mat(SKIN)
+	var stone := _mat(STONE)
 	var shade := _mat(SHADE)
 	var dark := _mat(DARK)
 	var white := _mat(WHITE)
-	_pupil_mat = _mat(Color.BLACK)
+	_pupil_mat = _mat(Color(0.5, 0.0, 0.08))
 	_pupil_mat.emission_enabled = true
-	_pupil_mat.emission = Color(1.0, 0.08, 0.25)
+	_pupil_mat.emission = Color(1.0, 0.06, 0.18)
 	_pupil_mat.emission_energy_multiplier = IDLE_GLOW
 
-	_sphere(visual, skin, 2.6, Vector3.ZERO, Vector3(1.0, 1.18, 0.92))           # skull
-	_sphere(visual, shade, 2.4, Vector3(0, -2.9, 0.6), Vector3(1.5, 0.75, 1.3))   # the mountain it rises from
-	_sphere(visual, dark, 2.62, Vector3(0, 1.7, 0.45), Vector3(1.04, 0.62, 0.95)) # hair cap
-	_sphere(visual, shade, 0.95, Vector3(-1.35, -1.25, -1.2), Vector3.ONE)       # jowls
-	_sphere(visual, shade, 0.95, Vector3(1.35, -1.25, -1.2), Vector3.ONE)
-	_sphere(visual, skin, 0.62, Vector3(-2.55, 0.1, 0.0), Vector3(0.35, 1.0, 0.7)) # ears
-	_sphere(visual, skin, 0.62, Vector3(2.55, 0.1, 0.0), Vector3(0.35, 1.0, 0.7))
-
-	var nose := _capsule(visual, skin, 0.36, 1.5, Vector3(0, -0.05, -2.35))
+	_sphere(visual, stone, 2.6, Vector3.ZERO, Vector3(1.0, 1.18, 0.92))            # skull
+	_sphere(visual, dark, 2.62, Vector3(0, 1.75, 0.5), Vector3(1.04, 0.6, 0.95))    # hair cap
+	# Shelf brow: one heavy ledge across the whole face.
+	_box(visual, shade, Vector3(3.6, 0.42, 0.9), Vector3(0, 1.12, -2.05))
+	# Curtain jowls: long folds hanging past the jaw.
+	for side in [-1.0, 1.0]:
+		_sphere(visual, shade, 0.9, Vector3(1.45 * side, -1.55, -1.0), Vector3(0.85, 1.6, 0.9))
+	# Teacup-handle ears: loops standing off the sides of the head.
+	for side in [-1.0, 1.0]:
+		var ear := MeshInstance3D.new()
+		var torus := TorusMesh.new()
+		torus.inner_radius = 0.38
+		torus.outer_radius = 0.68
+		torus.material = stone
+		ear.mesh = torus
+		ear.position = Vector3(2.75 * side, 0.1, 0.1)
+		ear.rotation_degrees = Vector3(0, 0, 90)
+		ear.scale = Vector3(1.0, 1.0, 1.35)
+		ear.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		visual.add_child(ear)
+	# A long, heavy nose.
+	var nose := _capsule(visual, stone, 0.38, 1.7, Vector3(0, -0.05, -2.35))
 	nose.rotation_degrees.x = -62.0
-	_sphere(visual, shade, 0.5, Vector3(0, -0.55, -2.85), Vector3(1.0, 0.9, 1.0)) # nose tip
+	_sphere(visual, shade, 0.52, Vector3(0, -0.6, -2.85), Vector3(1.0, 0.9, 1.0))
+	# Mail-slot mouth: a thin dark slot with a lip of stone.
+	_box(visual, dark, Vector3(1.5, 0.12, 0.6), Vector3(0, -1.32, -2.0))
+	_box(visual, shade, Vector3(1.8, 0.1, 0.5), Vector3(0, -1.18, -2.08))
 
 	for side in [-1.0, 1.0]:
-		var brow := _box(visual, dark, Vector3(1.25, 0.26, 0.4), Vector3(0.88 * side, 1.12, -2.08))
-		brow.rotation_degrees.z = -14.0 * side
-		# Socket holds the eyeball; close_eyes() squashes it shut.
+		# Socket holds the eyeball under the brow; close_eyes() brings the lids down.
 		var socket := Node3D.new()
 		socket.name = "SocketL" if side < 0.0 else "SocketR"
-		socket.position = Vector3(0.88 * side, 0.48, -1.98)
+		socket.position = Vector3(0.9 * side, 0.5, -1.98)
 		visual.add_child(socket)
-		_sphere(socket, white, 0.58, Vector3.ZERO, Vector3.ONE)
+		_sphere(socket, white, 0.6, Vector3.ZERO, Vector3.ONE)
 		var eye := Node3D.new()
 		eye.name = "EyeL" if side < 0.0 else "EyeR"
 		socket.add_child(eye)
-		var pupil := _sphere(eye, _pupil_mat, 0.28, Vector3(0, 0, -0.5), Vector3(1, 1, 0.4))
-		_base_pupil_scale = pupil.scale
-
-	_box(visual, dark, Vector3(1.6, 0.16, 0.5), Vector3(0, -1.35, -1.95))         # mouth line
-	_box(visual, shade, Vector3(2.0, 0.12, 0.4), Vector3(0, -1.08, -2.05))        # upper lip
+		# Target eye: red ring first (it scales with the stare), black pupil in its centre.
+		var ring := _sphere(eye, _pupil_mat, 0.36, Vector3(0, 0, -0.5), Vector3(1, 1, 0.3))
+		_sphere(eye, _mat(Color.BLACK), 0.16, Vector3(0, 0, -0.6), Vector3(1, 1, 0.4))
+		_base_pupil_scale = ring.scale
+		# Eyelid: a shell of stone above the eye that drops over it.
+		var lid := _sphere(socket, stone, 0.66, Vector3(0, 0.0, 0.0), Vector3(1, 1, 1))
+		lid.name = "Lid"
+		lid.position = Vector3(0, 1.1, 0)
+		lid.visible = false
 
 
 func _mat(color: Color) -> StandardMaterial3D:

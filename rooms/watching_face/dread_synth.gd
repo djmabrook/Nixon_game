@@ -9,6 +9,8 @@ const RATE := 22050.0
 var motion := 0.0
 var stare := 0.0
 var proximity := 0.0
+## 0..1, how loud a nearby telephone rings (he is out of the Watcher's sight).
+var ring := 0.0
 
 var _playback: AudioStreamGeneratorPlayback
 var _phase_a := 0.0
@@ -20,6 +22,9 @@ var _sting_t := -1.0
 var _sting_len := 0.0
 var _sting_pitch := 0.0
 var _level := 0.0
+var _ring_clock := 0.0
+var _ring_level := 0.0
+var _hiss := 0.0
 
 
 func _ready() -> void:
@@ -87,6 +92,18 @@ func _process(_delta: float) -> void:
 			if _sting_t >= _sting_len:
 				_sting_t = -1.0
 
-		var s := clampf(drone + beat + sting_s, -1.0, 1.0)
+		# The Watcher's broadcast with nothing on it: a held tone and a hiss under the drone.
+		_hiss = _hiss * 0.92 + randf_range(-1.0, 1.0) * 0.08
+		var broadcast := (sin(TAU * 220.0 * _ring_clock) * 0.012 + _hiss * 0.05) * (0.3 + motion)
+
+		# A telephone ringing somewhere close: two tones, two seconds on, four off.
+		_ring_level += (ring - _ring_level) * 0.0005
+		_ring_clock += dt
+		var cadence := fmod(_ring_clock, 6.0)
+		var ring_s := 0.0
+		if cadence < 2.0:
+			ring_s = (sin(TAU * 440.0 * _ring_clock) + sin(TAU * 480.0 * _ring_clock)) * 0.08 * _ring_level
+
+		var s := clampf(drone + beat + sting_s + broadcast + ring_s, -1.0, 1.0)
 		buf[i] = Vector2(s, s)
 	_playback.push_buffer(buf)

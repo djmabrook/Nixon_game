@@ -4,9 +4,9 @@ render_mode unshaded;
 // on a sheet, a vast shadow pools beneath it (you can read where it is without looking),
 // and rings ripple out of it while it moves. Distances are in metres.
 
-uniform vec4 base_color : source_color = vec4(0.035, 0.006, 0.07, 1.0);
-uniform vec4 line_color : source_color = vec4(0.78, 0.32, 1.0, 1.0);
-uniform vec4 hot_color : source_color = vec4(1.0, 0.22, 0.5, 1.0);
+uniform vec4 base_color : source_color = vec4(0.02, 0.01, 0.05, 1.0);
+uniform vec4 line_color : source_color = vec4(0.5, 0.32, 1.0, 1.0);
+uniform vec4 hot_color : source_color = vec4(0.92, 0.9, 0.86, 1.0);
 uniform float cell = 4.0;
 uniform float line_width = 0.07;
 uniform vec3 face_pos = vec3(0.0, 0.0, 0.0);

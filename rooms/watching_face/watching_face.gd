@@ -1,41 +1,72 @@
 extends Room
-## The Watching Face. Rule broken: things only move when nobody is looking.
+## The Watcher's mountain. Rule: things only move when nobody is looking.
 ##
-## The little man stands at the start of a striped road a kilometre long, on an endless
-## purple grid. At its end a face the size of a mountain fills the sky. Around the road
-## stand telephones as big as houses and microphone masts as tall as towers.
-## The face is frozen while you can see it. The moment it is out of view, because you
-## looked away or something stands in the way, it slides toward you: slow to start,
-## heavy, and heard late. In the open its stare weighs you down to a crawl; behind cover
-## you are fast but blind to it. Reach the black disc at its foot and its eyes close.
-## Let it reach you and you turn to grey stone for a beat, then the moment rewinds.
+## The little man crosses an open grid, climbs a staircase as wide as the horizon to the
+## Watcher's shoulders, and walks up his tie, a striped road on his chest, to the collar
+## under his chin. The face is frozen while any of it is on screen; out of view (looked away
+## from, or hidden by a mast or a telephone) it slides toward him over the land. Its stare
+## slows him and drains the ink from the picture. Caught, he turns to a small grey statue,
+## the world flashes to the Negative, and the moment rewinds.
+##
+## The three inks he carried home are his only shelter:
+##   ember   (tap interact)  plant a fire; inside its light the face cannot move, even unseen.
+##   salmon  (walking)       pink footing blooms under his feet and holds against the land's
+##                            slide toward the face. Stand still and he slides.
+##   crimson (hold interact) lay the black disc; standing on it is a blind spot for the stare.
+##
+## The ending: at the knot under his chin, he raises the ember (tap interact). The lids come
+## down, the red targets go out, the drone and heartbeat stop and the ultraviolet drains from
+## the sky. He walks on past the face, off screen and behind him, and nothing moves. The black
+## disc beyond the head takes him home.
 
-## Player speed multiplier at full stare (walk and run).
+const BRAND := preload("res://rooms/watching_face/models/brand.glb")
+
+const INK_EMBER := &"ember"
+const INK_SALMON := &"salmon"
+const INK_CRIMSON := &"crimson"
+
+## Speed multiplier at full stare (walk and run).
 @export_range(0.1, 1.0) var stare_slow := 0.38
-## Seconds after a catch before the room resets.
-@export var catch_reset_delay := 2.2
+## Seconds of the stone-and-Negative beat before the rewind.
+@export var catch_reset_delay := 2.0
 
-@export_group("Cover")
-@export var cover_seed := 7
-@export var telephone_count := 34
-@export var mast_count := 26
-## Area cover is scattered over (x range, z range), in metres.
-@export var field_x := Vector2(-170, 170)
-@export var field_z := Vector2(-380, 540)
-## Keep this much of the road's centre open so there is always an exposed line.
-@export var road_clear := 9.0
+@export_group("Inks")
+## Most fires that can burn at once; planting another moves the oldest.
+@export var max_fires := 3
+## Radius of a fire's light, in metres.
+@export var fire_radius := 40.0
+## Radius of the laid black disc.
+@export var disc_radius := 7.0
+## Seconds interact must be held to lay the disc instead of planting a fire.
+@export var hold_to_lay := 0.45
+## Speed of the land's slide toward the face: far away, and right under it (m/s).
+@export var slide_far := 0.6
+@export var slide_near := 3.2
 
 @onready var face: FaceBoss = $FaceBoss
-@onready var goal: Area3D = $Disc/Goal
-@onready var gate_ring: Node3D = $Disc/Ring
+@onready var land: Node3D = $Landscape
+@onready var foot: Area3D = $Foot
+@onready var exit_disc: Area3D = $ExitDisc/Goal
+@onready var exit_ring: Node3D = $ExitDisc/Ring
 @onready var floor_mat: ShaderMaterial = $Floor/Mesh.material_override
 @onready var vignette_mat: ShaderMaterial = $Screen/Vignette.material
+@onready var negative: ColorRect = $Screen/Negative
 @onready var synth: AudioStreamPlayer = $Synth
+
 var _base_walk := 5.0
 var _base_run := 10.0
 var _shake := 0.0
 var _flash := 0.0
-var _done := false
+var _caught := false
+var _at_foot := false
+var _ended := false
+var _leaving := false
+var _press_time := -1.0
+var _fires: Array[Node3D] = []
+var _disc: Node3D
+var _last_tile := Vector3.INF
+var _effective_stare := 0.0
+var _sky_mat: ShaderMaterial
 
 
 func _ready() -> void:
@@ -44,8 +75,12 @@ func _ready() -> void:
 	$Floor/Mesh.material_override = floor_mat
 	vignette_mat = vignette_mat.duplicate()
 	$Screen/Vignette.material = vignette_mat
-	_raise_cover()
-	_raise_skyline()
+	negative.material = negative.material.duplicate()
+	negative.visible = false
+	var env: Environment = $WorldEnvironment.environment
+	_sky_mat = env.sky.sky_material
+	_sky_mat.set_shader_parameter(&"awake", 1.0)
+	face.ground_provider = land.ground_height
 
 
 func _on_room_entered(_spawn: StringName) -> void:
@@ -53,46 +88,175 @@ func _on_room_entered(_spawn: StringName) -> void:
 	_base_run = Game.player.run_speed
 	face.caught_player.connect(_on_caught)
 	face.revealed.connect(_on_revealed)
-	goal.body_entered.connect(_on_goal_body_entered)
+	foot.body_entered.connect(_on_foot_body.bind(true))
+	foot.body_exited.connect(_on_foot_body.bind(false))
+	exit_disc.body_entered.connect(_on_exit_disc_entered)
 	floor_mat.set_shader_parameter(&"face_radius", face.head_radius())
-	# The reveal: pull far back so he is a speck on the road and the face fills the sky.
-	# It cannot move during the shot, since the shot is looking straight at it.
+	# The reveal: pull far back so he is a speck on the grid under the staircase and the face.
 	if DisplayServer.get_name() != "headless":
-		Game.camera.play_vista(face.global_position, 70.0, 2.5, 2.5)
+		Game.camera.play_vista(face.centre(), 80.0, 2.5, 2.5)
+
+
+## True if the little man has brought this ink home. The room is locked until all three
+## are, so in play this is always true; it keeps each shelter tied to its ink.
+func has_ink(ink: StringName) -> bool:
+	return Game.is_ink_home(ink)
+
+
+# --- Input: tap plants the ember (or raises it at his foot), hold lays the disc --------
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _caught or _leaving:
+		return
+	if event.is_action_pressed(&"interact"):
+		get_viewport().set_input_as_handled()
+		_press_time = 0.0
+	elif event.is_action_released(&"interact") and _press_time >= 0.0:
+		get_viewport().set_input_as_handled()
+		if _press_time < hold_to_lay:
+			tap()
+		_press_time = -1.0
+
+
+## A short press: raise the ember at his foot, otherwise plant a fire.
+func tap() -> void:
+	if _at_foot and not _ended and has_ink(INK_EMBER):
+		raise_ember()
+	elif not _ended:
+		plant_fire()
+
+
+func plant_fire() -> void:
+	if not has_ink(INK_EMBER):
+		return
+	var fire: Node3D
+	if _fires.size() >= max_fires:
+		fire = _fires.pop_front()
+	else:
+		fire = _make_fire()
+		add_child(fire)
+	fire.global_position = Game.player.global_position
+	_fires.append(fire)
+	synth.sting(0.15)
+
+
+func lay_disc() -> void:
+	if not has_ink(INK_CRIMSON):
+		return
+	if _disc == null:
+		_disc = _make_disc()
+		add_child(_disc)
+	_disc.global_position = Game.player.global_position + Vector3.UP * 0.05
+	_disc.scale = Vector3.ONE * 0.05
+	create_tween().set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT).tween_property(_disc, "scale", Vector3.ONE, 0.4)
+
+
+func is_in_firelight(p: Vector3) -> bool:
+	for f in _fires:
+		if Vector2(f.global_position.x - p.x, f.global_position.z - p.z).length() < fire_radius:
+			return true
+	return false
+
+
+func is_on_disc(p: Vector3) -> bool:
+	return _disc != null and Vector2(_disc.global_position.x - p.x, _disc.global_position.z - p.z).length() < disc_radius
+
+
+# --- Every frame -----------------------------------------------------------------
+
+func _physics_process(delta: float) -> void:
+	var player := Game.player
+	if not is_instance_valid(player) or _caught or Game.is_travelling():
+		return
+	if _press_time >= 0.0:
+		_press_time += delta
+		if _press_time >= hold_to_lay and _press_time - delta < hold_to_lay:
+			lay_disc()
+	if _ended:
+		return
+
+	# Ember: inside its light the face cannot move, seen or not.
+	face.held = is_in_firelight(player.global_position)
+
+	# Salmon: the land slides toward the face. Pink footing blooms while he walks and holds.
+	var holding := player.is_walking and has_ink(INK_SALMON)
+	if holding:
+		if player.global_position.distance_to(_last_tile) > 2.4:
+			_last_tile = player.global_position
+			_bloom_tile(player.global_position)
+	elif player.is_on_floor():
+		var to_face := face.global_position - player.global_position
+		to_face.y = 0.0
+		if to_face.length() > 1.0:
+			var speed := lerpf(slide_far, slide_near, _proximity())
+			player.move_and_collide(to_face.normalized() * speed * delta)
 
 
 func _process(delta: float) -> void:
 	var player := Game.player
 	if not is_instance_valid(player) or not is_instance_valid(face):
 		return
+	var proximity := _proximity()
 
-	# Its stare weighs the little man down.
+	# Crimson: on the disc the stare falls into a blind spot.
+	_effective_stare = 0.0 if is_on_disc(player.global_position) or _ended else face.stare
 	if player.controls_enabled:
-		var k := lerpf(1.0, stare_slow, face.stare)
+		var k := lerpf(1.0, stare_slow, _effective_stare)
 		player.move_speed = _base_walk * k
 		player.run_speed = _base_run * k
 
-	var dist := face.flat_distance_to(player.global_position)
-	var proximity := clampf(1.0 - (dist - face.catch_radius) / 700.0, 0.0, 1.0)
+	# The stare drains the ink from the picture (the dither shader's hook), or darkens the edges.
+	var look := get_tree().get_first_node_in_group(&"dither_look")
+	if look:
+		look.set(&"drain", _effective_stare)
+	_flash = move_toward(_flash, 0.0, delta * 1.5)
+	vignette_mat.set_shader_parameter(&"stare", maxf(_effective_stare * (0.3 if look else 0.8), proximity * 0.5))
+	vignette_mat.set_shader_parameter(&"flash", _flash)
 
 	floor_mat.set_shader_parameter(&"face_pos", face.global_position)
 	floor_mat.set_shader_parameter(&"face_motion", face.motion)
-	floor_mat.set_shader_parameter(&"stare", face.stare)
-
-	_flash = move_toward(_flash, 0.0, delta * 1.5)
-	vignette_mat.set_shader_parameter(&"stare", maxf(face.stare * 0.8, proximity * 0.6))
-	vignette_mat.set_shader_parameter(&"flash", _flash)
+	floor_mat.set_shader_parameter(&"stare", _effective_stare)
 
 	synth.motion = face.motion
-	synth.stare = face.stare
+	synth.stare = _effective_stare
 	synth.proximity = proximity
+	synth.ring = 0.0 if _ended or face.sees_player else _nearest_phone_closeness(player.global_position)
 
-	gate_ring.rotate_object_local(Vector3.UP, delta * 0.3)
-
+	_turn_mics(player, delta)
+	exit_ring.rotate_object_local(Vector3.UP, delta * 0.3)
+	for f in _fires:
+		var light := f.get_node(^"Light") as OmniLight3D
+		light.light_energy = 6.0 + sin(Time.get_ticks_msec() * 0.013 + f.position.x) * 1.2 + randf() * 0.6
 	_apply_shake(delta, proximity)
 
-	if player.global_position.y < -20.0 and not Game.is_travelling():
+	if player.global_position.y < -40.0 and not Game.is_travelling():
 		_reset()
+
+
+func _proximity() -> float:
+	var dist := face.flat_distance_to(Game.player.global_position)
+	return clampf(1.0 - (dist - face.catch_radius) / 900.0, 0.0, 1.0)
+
+
+## Microphones swivel toward his footsteps.
+func _turn_mics(player: Player, delta: float) -> void:
+	if not player.is_walking:
+		return
+	for head: Node3D in land.mic_heads:
+		var d := player.global_position - head.global_position
+		if Vector2(d.x, d.z).length() > 160.0:
+			continue
+		var want := atan2(-d.x, -d.z)
+		head.global_rotation.y = lerp_angle(head.global_rotation.y, want, clampf(delta * 0.8, 0.0, 1.0))
+
+
+## Telephones ring when he is out of the Watcher's sight. 1 = right beside one.
+func _nearest_phone_closeness(p: Vector3) -> float:
+	var best := 0.0
+	for phone: Node3D in land.telephones:
+		var d := phone.global_position.distance_to(p)
+		best = maxf(best, 1.0 - d / 90.0)
+	return best
 
 
 func _apply_shake(delta: float, proximity: float) -> void:
@@ -100,11 +264,12 @@ func _apply_shake(delta: float, proximity: float) -> void:
 	if not is_instance_valid(cam):
 		return
 	_shake = move_toward(_shake, 0.0, delta * 1.2)
-	# A low tremor while it moves close by, on top of event shakes.
 	var amount := _shake * _shake * 0.35 + proximity * proximity * face.motion * 0.08
 	cam.h_offset = randf_range(-amount, amount)
 	cam.v_offset = randf_range(-amount, amount)
 
+
+# --- Events ----------------------------------------------------------------------
 
 func _on_revealed(distance: float) -> void:
 	var strength := clampf(distance / 150.0, 0.2, 1.0)
@@ -114,42 +279,60 @@ func _on_revealed(distance: float) -> void:
 
 
 func _on_caught() -> void:
-	if _done:
+	if _caught or _ended:
 		return
-	_done = true
-	Game.player.controls_enabled = false
-	Game.player.velocity = Vector3.ZERO
-	# Make him look: swing the view up onto the face as it drops.
-	var cam := Game.camera
-	var to_face := face.global_position - cam.global_position
-	var t := create_tween().set_parallel().set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	t.tween_property(cam, "yaw_degrees", rad_to_deg(atan2(-to_face.x, -to_face.z)), 0.5)
-	t.tween_property(cam, "pitch_degrees", 30.0, 0.5)
-	face.lunge(Game.player.global_position)
-	_turn_to_stone(Game.player)
+	_caught = true
+	var player := Game.player
+	player.controls_enabled = false
+	player.velocity = Vector3.ZERO
+	# He stiffens into a small grey statue, a monument like the Watcher.
+	_turn_to_stone(player)
+	face.lunge(player.global_position)
 	synth.slam()
 	_shake = 1.0
-	_flash = 0.5
-	await get_tree().create_timer(catch_reset_delay).timeout
+	# The world seen from inside the stare: the Negative, for a beat.
+	negative.visible = true
+	await get_tree().create_timer(0.7).timeout
+	negative.visible = false
+	await get_tree().create_timer(maxf(catch_reset_delay - 0.7, 0.0)).timeout
 	_reset()
 
 
-func _on_goal_body_entered(body: Node3D) -> void:
-	if not body is Player or _done:
+## The ending: firelight climbs the stone and, for the first time, he is the one seen.
+func raise_ember() -> void:
+	if _ended:
 		return
-	_done = true
-	# The eyes close, the lights go out, the sound stops. Nothing moves any more.
-	face.close_eyes(2.5)
+	_ended = true
+	face.held = true
+	face.close_eyes(3.0)
+	var fire := _make_fire()
+	add_child(fire)
+	fire.global_position = Game.player.global_position + Vector3.UP * 2.0
+	var light := fire.get_node(^"Light") as OmniLight3D
+	create_tween().tween_property(light, "omni_range", 400.0, 3.0)
+	Game.camera.play_shot(Game.player.global_position + Vector3(30, 8, 40), face.centre(), 3.0, 2.0)
+	create_tween().tween_property(synth, "volume_db", -80.0, 4.0)
+	create_tween().tween_method(func(v): _sky_mat.set_shader_parameter(&"awake", v), 1.0, 0.0, 6.0)
+
+
+func _on_foot_body(body: Node3D, inside: bool) -> void:
+	if body is Player:
+		_at_foot = inside
+
+
+func _on_exit_disc_entered(body: Node3D) -> void:
+	if not body is Player or not _ended or _leaving:
+		return
+	_leaving = true
 	complete()
-	_flash = 0.4
-	Game.player.move_speed = _base_walk
-	Game.player.run_speed = _base_run
-	create_tween().tween_property(synth, "volume_db", -60.0, 3.0)
-	await get_tree().create_timer(4.0).timeout
+	await get_tree().create_timer(1.0).timeout
 	exit_to_hub()
 
 
-## The caught beat: the little man goes grey and still, like a small statue.
+func _reset() -> void:
+	Game.go_to(room_id, &"from_hub")
+
+
 func _turn_to_stone(player: Player) -> void:
 	var stone := StandardMaterial3D.new()
 	stone.albedo_color = Color(0.55, 0.55, 0.58)
@@ -158,182 +341,72 @@ func _turn_to_stone(player: Player) -> void:
 		(mi as MeshInstance3D).material_override = stone
 
 
-func _reset() -> void:
-	Game.go_to(room_id, &"from_hub")
+# --- Ink props (placeholders) --------------------------------------------------------
+
+func _make_fire() -> Node3D:
+	var root := Node3D.new()
+	root.name = "Fire"
+	# The brand from the art: a charred stick with a faceted flame, planted upright.
+	var brand := BRAND.instantiate() as Node3D
+	brand.scale = Vector3.ONE * 2.0
+	root.add_child(brand)
+	var light := OmniLight3D.new()
+	light.name = "Light"
+	light.light_color = Color(1.0, 0.5, 0.2)
+	light.light_energy = 6.0
+	light.omni_range = fire_radius
+	light.omni_attenuation = 0.6
+	light.position.y = 2.0
+	root.add_child(light)
+	# A faint ring on the ground marks the edge of safe light.
+	var ring := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = fire_radius - 0.4
+	tm.outer_radius = fire_radius
+	tm.rings = 96
+	var rm := StandardMaterial3D.new()
+	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rm.albedo_color = Color(1.0, 0.5, 0.2, 0.35)
+	rm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	tm.material = rm
+	ring.mesh = tm
+	ring.scale.y = 0.05
+	root.add_child(ring)
+	return root
 
 
-# --- Cover ------------------------------------------------------------------
-# Telephones the size of houses and microphone masts as tall as towers, placed from
-# a fixed seed so the field is the same every visit. Placeholder geometry.
-
-var _mats := {}
-
-
-func _mat(key: String, color: Color, unshaded := false, rim := 0.0) -> StandardMaterial3D:
-	if not _mats.has(key):
-		var m := StandardMaterial3D.new()
-		m.albedo_color = color
-		m.roughness = 0.6
-		if unshaded:
-			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		if rim > 0.0:
-			m.rim_enabled = true
-			m.rim = rim
-		_mats[key] = m
-	return _mats[key]
-
-
-func _raise_cover() -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = cover_seed
-	var placed: Array[Vector2] = []
-	var phones_left := telephone_count
-	var masts_left := mast_count
-	var tries := 0
-	while phones_left + masts_left > 0 and tries < 5000:
-		tries += 1
-		var p := Vector2(rng.randf_range(field_x.x, field_x.y), rng.randf_range(field_z.x, field_z.y))
-		# More cover near the road, thinning out into the empty grid.
-		if absf(p.x) > 60.0 and rng.randf() < 0.5:
-			continue
-		if absf(p.x) < road_clear:
-			continue
-		var crowded := false
-		for q in placed:
-			if q.distance_to(p) < 34.0:
-				crowded = true
-				break
-		if crowded:
-			continue
-		placed.append(p)
-		var node: Node3D
-		if rng.randf() < float(masts_left) / float(masts_left + phones_left):
-			node = _mast(rng)
-			masts_left -= 1
-		else:
-			node = _telephone(rng)
-			phones_left -= 1
-		node.position = Vector3(p.x, 0.0, p.y)
-		node.rotation.y = rng.randf() * TAU
-		$Cover.add_child(node)
-
-
-func _telephone(rng: RandomNumberGenerator) -> StaticBody3D:
-	var body := _cover_body()
-	var s := rng.randf_range(0.85, 1.35)
-	var black := _mat("phone", Color(0.04, 0.02, 0.06), false, 0.35)
-	var pink := _mat("cord", Color(1.0, 0.45, 0.75), true)
-	var cream := _mat("dial", Color(0.92, 0.86, 0.95))
-	# Base: a sloped block the size of a house.
-	_box(body, black, Vector3(20, 10, 16) * s, Vector3(0, 5, 0) * s, true)
-	_box(body, black, Vector3(16, 4, 12) * s, Vector3(0, 12, 0) * s, true)
-	# Handset lying across the top: two ear cups joined by a bar.
-	_box(body, black, Vector3(30, 4, 5) * s, Vector3(0, 17, 0) * s, true)
-	_box(body, black, Vector3(7, 6, 8) * s, Vector3(-13, 15, 0) * s, true)
-	_box(body, black, Vector3(7, 6, 8) * s, Vector3(13, 15, 0) * s, true)
-	# Dial on the front face.
-	var dial := _cyl(body, cream, 4.5 * s, 0.6 * s, Vector3(0, 6, -8.2) * s)
-	dial.rotation_degrees.x = 90.0
-	var hub := _cyl(body, black, 1.6 * s, 0.8 * s, Vector3(0, 6, -8.6) * s)
-	hub.rotation_degrees.x = 90.0
-	# A cord trailing off across the grid.
-	_box(body, pink, Vector3(0.8, 0.8, 30) * s, Vector3(10, 0.4, 22) * s, false)
-	return body
-
-
-func _mast(rng: RandomNumberGenerator) -> StaticBody3D:
-	var body := _cover_body()
-	var h := rng.randf_range(70.0, 170.0)
-	var steel := _mat("steel", Color(0.55, 0.5, 0.62), false, 0.25)
-	var grille := _mat("grille", Color(0.12, 0.1, 0.16), false, 0.5)
-	var glow := _mat("tally", Color(1.0, 0.2, 0.35), true)
-	# Tripod foot, wide enough to hide behind.
-	_cyl(body, steel, 3.0, 6.0, Vector3(0, 3, 0), true, 7.0)
-	_cyl(body, steel, 1.8, h, Vector3(0, h * 0.5, 0), true)
-	# Microphone head: a capsule of grille on a collar, tipped toward the face.
-	var head := Node3D.new()
-	head.position = Vector3(0, h, 0)
-	head.rotation_degrees.x = -25.0
-	body.add_child(head)
-	_cyl(head, steel, 3.2, 4.0, Vector3(0, 2, 0))
-	var cap := MeshInstance3D.new()
-	var cm := CapsuleMesh.new()
-	cm.radius = 6.0
-	cm.height = 22.0
-	cm.material = grille
-	cap.mesh = cm
-	cap.position = Vector3(0, 14, 0)
-	head.add_child(cap)
-	# A small red light at the collar, for scale against the sky.
-	var light := _cyl(head, glow, 0.9, 0.6, Vector3(0, 4.3, -3.2))
-	light.rotation_degrees.x = 90.0
-	return body
-
-
-func _cover_body() -> StaticBody3D:
-	var body := StaticBody3D.new()
-	body.add_to_group(&"cover")
-	return body
-
-
-func _box(parent: Node3D, mat: Material, size: Vector3, pos: Vector3, solid := false) -> MeshInstance3D:
+func _make_disc() -> Node3D:
 	var mi := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = size
-	bm.material = mat
-	mi.mesh = bm
-	mi.position = pos
-	parent.add_child(mi)
-	if solid:
-		var shape := BoxShape3D.new()
-		shape.size = size
-		_collide(parent, shape, pos)
-	return mi
-
-
-func _cyl(parent: Node3D, mat: Material, radius: float, height: float, pos: Vector3, solid := false, bottom := -1.0) -> MeshInstance3D:
-	var mi := MeshInstance3D.new()
+	mi.name = "BlindSpot"
 	var cm := CylinderMesh.new()
-	cm.top_radius = radius
-	cm.bottom_radius = bottom if bottom > 0.0 else radius
-	cm.height = height
-	cm.radial_segments = 24
+	cm.top_radius = disc_radius
+	cm.bottom_radius = disc_radius
+	cm.height = 0.05
+	cm.radial_segments = 48
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color.BLACK
 	cm.material = mat
 	mi.mesh = cm
-	mi.position = pos
-	parent.add_child(mi)
-	if solid:
-		var shape := CylinderShape3D.new()
-		shape.radius = maxf(radius, bottom)
-		shape.height = height
-		_collide(parent, shape, pos)
 	return mi
 
 
-func _collide(parent: Node3D, shape: Shape3D, pos: Vector3) -> void:
-	var cs := CollisionShape3D.new()
-	cs.shape = shape
-	cs.position = pos
-	parent.add_child(cs)
-
-
-## Far-off silhouettes past the edges of the field, purely for scale.
-func _raise_skyline() -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = cover_seed * 31
+func _bloom_tile(at: Vector3) -> void:
+	var tile := MeshInstance3D.new()
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(1.8, 1.8)
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.02, 0.0, 0.035)
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	for i in 40:
-		var ang := rng.randf() * TAU
-		var r := rng.randf_range(1400.0, 3200.0)
-		var size := Vector3(rng.randf_range(40.0, 120.0), rng.randf_range(300.0, 1100.0), rng.randf_range(40.0, 120.0))
-		var mi := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = size
-		bm.material = mat
-		mi.mesh = bm
-		mi.position = Vector3(cos(ang) * r, size.y * 0.5, sin(ang) * r)
-		mi.rotation.y = rng.randf() * TAU
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		$Skyline.add_child(mi)
+	mat.albedo_color = Color(0.98, 0.56, 0.48, 0.9)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	pm.material = mat
+	tile.mesh = pm
+	add_child(tile)
+	tile.global_position = at + Vector3.UP * 0.12
+	tile.rotation.y = snappedf(Game.player.visual.rotation.y, PI * 0.5)
+	tile.scale = Vector3.ONE * 0.2
+	var t := create_tween()
+	t.tween_property(tile, "scale", Vector3.ONE, 0.2)
+	t.tween_interval(1.6)
+	t.tween_property(mat, "albedo_color:a", 0.0, 0.8)
+	t.tween_callback(tile.queue_free)

@@ -1,0 +1,127 @@
+[gd_resource type="AudioBusLayout" load_steps=10 format=3]
+
+; The game's mixer. See audio/AUDIO.md before changing it.
+;
+; Master <- Broadcast   the Watcher: hum, hiss, held tone. Never drained by the stare (it IS the stare).
+; Master <- World       everything else. The stare drains it toward a one-bit telephone band.
+;   World <- Bed        each region's air. Ducks when giants sound.
+;   World <- Near       the little man and what he touches. Small room reverb.
+;   World <- Far        giant things: low-passed, vast reverb. Arrives late (see Sound.play_at).
+;   World <- Ink        the only music: ink notes and mends. Hall reverb.
+
+[sub_resource type="AudioEffectHardLimiter" id="master_limit"]
+ceiling_db = -0.8
+release = 0.15
+
+[sub_resource type="AudioEffectLowPassFilter" id="broadcast_speaker"]
+cutoff_hz = 9000.0
+resonance = 0.6
+
+[sub_resource type="AudioEffectLowPassFilter" id="stare_lowpass"]
+cutoff_hz = 20000.0
+resonance = 0.75
+
+[sub_resource type="AudioEffectHighPassFilter" id="stare_highpass"]
+cutoff_hz = 10.0
+resonance = 0.6
+
+[sub_resource type="AudioEffectCompressor" id="bed_duck"]
+threshold = -26.0
+ratio = 4.0
+attack_us = 20000.0
+release_ms = 900.0
+sidechain = &"Far"
+
+[sub_resource type="AudioEffectReverb" id="near_room"]
+predelay_msec = 20.0
+room_size = 0.35
+damping = 0.6
+spread = 0.8
+hipass = 0.15
+dry = 1.0
+wet = 0.12
+
+[sub_resource type="AudioEffectLowPassFilter" id="far_air"]
+cutoff_hz = 2200.0
+resonance = 0.6
+
+[sub_resource type="AudioEffectReverb" id="far_space"]
+predelay_msec = 90.0
+predelay_feedback = 0.25
+room_size = 0.95
+damping = 0.55
+spread = 1.0
+hipass = 0.0
+dry = 1.0
+wet = 0.3
+
+[sub_resource type="AudioEffectReverb" id="ink_hall"]
+predelay_msec = 60.0
+room_size = 0.85
+damping = 0.35
+spread = 1.0
+hipass = 0.2
+dry = 1.0
+wet = 0.22
+
+[resource]
+bus/0/name = &"Master"
+bus/0/solo = false
+bus/0/mute = false
+bus/0/bypass_fx = false
+bus/0/volume_db = 0.0
+bus/0/send = &""
+bus/0/effect/0/effect = SubResource("master_limit")
+bus/0/effect/0/enabled = true
+bus/1/name = &"Broadcast"
+bus/1/solo = false
+bus/1/mute = false
+bus/1/bypass_fx = false
+bus/1/volume_db = 0.0
+bus/1/send = &"Master"
+bus/1/effect/0/effect = SubResource("broadcast_speaker")
+bus/1/effect/0/enabled = true
+bus/2/name = &"World"
+bus/2/solo = false
+bus/2/mute = false
+bus/2/bypass_fx = false
+bus/2/volume_db = 0.0
+bus/2/send = &"Master"
+bus/2/effect/0/effect = SubResource("stare_lowpass")
+bus/2/effect/0/enabled = true
+bus/2/effect/1/effect = SubResource("stare_highpass")
+bus/2/effect/1/enabled = true
+bus/3/name = &"Bed"
+bus/3/solo = false
+bus/3/mute = false
+bus/3/bypass_fx = false
+bus/3/volume_db = 0.0
+bus/3/send = &"World"
+bus/3/effect/0/effect = SubResource("bed_duck")
+bus/3/effect/0/enabled = true
+bus/4/name = &"Near"
+bus/4/solo = false
+bus/4/mute = false
+bus/4/bypass_fx = false
+bus/4/volume_db = 0.0
+bus/4/send = &"World"
+bus/4/effect/0/effect = SubResource("near_room")
+bus/4/effect/0/enabled = true
+bus/5/name = &"Far"
+bus/5/solo = false
+bus/5/mute = false
+bus/5/bypass_fx = false
+bus/5/volume_db = 0.0
+bus/5/send = &"World"
+bus/5/effect/0/effect = SubResource("far_air")
+bus/5/effect/0/enabled = true
+bus/5/effect/1/effect = SubResource("far_space")
+bus/5/effect/1/enabled = true
+bus/6/name = &"Ink"
+bus/6/solo = false
+bus/6/mute = false
+bus/6/bypass_fx = false
+bus/6/volume_db = 0.0
+bus/6/send = &"World"
+bus/6/effect/0/effect = SubResource("ink_hall")
+bus/6/effect/0/enabled = true

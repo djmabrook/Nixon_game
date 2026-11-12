@@ -27,9 +27,21 @@ shape = SubResource("shape")
 [node name="Visual" type="Node3D" parent="."]
 
 [node name="Body" type="MeshInstance3D" parent="Visual"]
+cast_shadow = 0
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
 mesh = SubResource("mesh")
 
 [node name="Nose" type="MeshInstance3D" parent="Visual"]
+cast_shadow = 0
 transform = Transform3D(0.15, 0, 0, 0, 0.15, 0, 0, 0, 0.15, 0, 1.4, -0.25)
+mesh = SubResource("mesh")
+
+[node name="CarrySlot" type="Node3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.32, 0.85, -0.1)
+
+[node name="ShadowCaster" type="Node3D" parent="."]
+
+[node name="Body" type="MeshInstance3D" parent="ShadowCaster"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.85, 0)
+cast_shadow = 3
 mesh = SubResource("mesh")

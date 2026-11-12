@@ -1,9 +1,10 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://rooms/test_room/test_room.gd" id="1"]
 [ext_resource type="Script" path="res://core/room_spawn.gd" id="2"]
 [ext_resource type="Script" path="res://core/room_exit.gd" id="3"]
 [ext_resource type="Script" path="res://core/vista_zone.gd" id="4"]
+[ext_resource type="PackedScene" path="res://props/watching_set.tscn" id="5"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_top_color = Color(0.08, 0.06, 0.16, 1)
@@ -65,6 +66,7 @@ size = Vector3(20, 6, 4)
 [node name="Room" type="Node3D" node_paths=PackedStringArray("focus_target")]
 script = ExtResource("1")
 focus_target = NodePath("Landmark")
+gives_ink = &"ember"
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("env")
@@ -117,3 +119,6 @@ pull_back = 90.0
 [node name="CollisionShape3D" type="CollisionShape3D" parent="VistaZone"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 0)
 shape = SubResource("vista_shape")
+
+[node name="WatchingSet" parent="." instance=ExtResource("5")]
+transform = Transform3D(0.866025, 0, 0.5, 0, 1, 0, -0.5, 0, 0.866025, 6, 0, -10)

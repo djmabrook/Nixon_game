@@ -70,6 +70,10 @@ Nodes:
   Watcher himself. Drive `presence` and `stare`; `await close_eyes(time)` winds it down to nothing.
   `spatial = false` for the mountain face (he is the sky); turn on `drains_world` on exactly one.
 
+The shared television (`props/watching_set.tscn`) already carries a `WatcherBroadcast`: it hums
+louder the more open its eyes are, stares (snow, a quicker pulse) within `stare_radius` meters,
+and powers off with a CRT click when its lids shut. Rooms that place one get its sound for free.
+
 Footsteps are automatic: `Sound` follows `Game.player` in every room and lands a step every
 0.95 m walked (1.55 m run) on `Sound.surface`. For rooms with several grounds, set
 `Sound.surface_resolver = func(pos): return &"water" if pos.y < 0.1 else &"stone"`.

@@ -79,6 +79,17 @@ func _ready() -> void:
 	await tv.close_eyes(0.3)
 	_check(not tv.eyes_open and Sound.get_stare() == 0.0, "closing its eyes lets the world go")
 
+	# The shared watching television carries its own broadcast and powers it off with its lids.
+	var set_scene := load("res://props/watching_set.tscn") as PackedScene
+	var wset := set_scene.instantiate()
+	Game.current_room.add_child(wset)
+	_check(wset.broadcast != null and wset.broadcast.eyes_open, "a watching set broadcasts")
+	wset.lid_speed = 20.0
+	wset.close()
+	for i in 90:
+		await get_tree().process_frame
+	_check(not wset.broadcast.eyes_open, "a closed set goes silent")
+
 	# A giant voice hears intensity late.
 	var gv := GiantVoice.new()
 	gv.sound_id = &"giant_grind"

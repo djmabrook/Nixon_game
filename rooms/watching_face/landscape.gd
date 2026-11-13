@@ -2,12 +2,12 @@ extends Node3D
 ## The land of the Watcher's mountain, built from code so its numbers live in one place.
 ##
 ## From the spawn on the open grid (+Z) toward the face (-Z):
-##   the plain -> a horizon-wide staircase -> his shoulders (a broad suit-grey plateau)
-##   -> the tie road climbing his chest between the lapels -> the collar under his chin.
-## The face rests on the collar. The black disc lies behind his head.
+##   the lower plain -> a horizon-wide staircase -> the upper plain, where the Watcher sits.
+## The Watcher himself is the rest of the climb (his model carries the tie road, the lapel
+## ledge and the shoulder plateaus), so this file only builds the land he sits on.
 ##
 ## ground_height(x, z) answers the height of this land anywhere, so the face can ride it
-## and cover can stand on it without raycasts. Units are metres. Placeholder geometry.
+## and cover can stand on it without raycasts. Units are metres.
 
 ## The staircase is a row of the art's mega stair modules: three 30 m terraces, each module
 ## 60.27 m wide and 108.245 m deep, rising toward the face. They are far too tall for him, so
@@ -27,24 +27,19 @@ const FLIGHT_HALF_W := 30.0
 const FLIGHT_START_Z := 600.0
 const FLIGHT_STEPS := 60
 
-const SHOULDER_Y := STAIR_RISE
-const SHOULDER_HALF_W := 800.0
+## The upper plain at the top of the stairs, where the Watcher sits and hunts.
+const UPPER_Y := STAIR_RISE
+const UPPER_HALF_W := 800.0
 const BACK_Z := -1300.0
 
-const CHEST_LOW_Z := 150.0
-const CHEST_TOP_Z := -450.0
-const CHEST_HALF_W := 350.0
-const COLLAR_Y := 200.0
-const COLLAR_HALF_W := 450.0
-
-## Where the tie road meets the knot: the foot of the face.
-const FOOT := Vector3(0, COLLAR_Y, -420)
+## Cover stops short of where the Watcher's tie meets the grid.
+const COVER_BACK_Z := -380.0
 
 const MIC_TOWER := preload("res://rooms/watching_face/models/microphone_tower.glb")
 
 @export var cover_seed := 7
-@export var mast_count := 90
-@export var telephone_count := 22
+@export var mast_count := 110
+@export var telephone_count := 28
 
 ## Microphone heads, so the room can turn them toward footsteps.
 var mic_heads: Array[Node3D] = []
@@ -56,20 +51,15 @@ var _mats := {}
 
 func _ready() -> void:
 	_build_stairs()
-	_build_bust()
-	_build_tie_road()
+	_build_upper_plain()
 	_raise_cover()
 
 
 ## Height of the land at (x, z).
 func ground_height(x: float, z: float) -> float:
 	var ax := absf(x)
-	if ax <= COLLAR_HALF_W and z <= CHEST_TOP_Z and z >= BACK_Z:
-		return COLLAR_Y
-	if ax <= CHEST_HALF_W and z < CHEST_LOW_Z and z > CHEST_TOP_Z:
-		return lerpf(SHOULDER_Y, COLLAR_Y, (CHEST_LOW_Z - z) / (CHEST_LOW_Z - CHEST_TOP_Z))
-	if ax <= SHOULDER_HALF_W and z <= STAIR_TOP_Z and z >= BACK_Z:
-		return SHOULDER_Y
+	if ax <= UPPER_HALF_W and z <= STAIR_TOP_Z and z >= BACK_Z:
+		return UPPER_Y
 	if ax <= FLIGHT_HALF_W and z > STAIR_TOP_Z and z <= FLIGHT_START_Z:
 		return STAIR_RISE * (FLIGHT_START_Z - z) / (FLIGHT_START_Z - STAIR_TOP_Z)
 	if ax <= STAIR_HALF_W and z > STAIR_TOP_Z and z <= STAIR_BOTTOM_Z:
@@ -92,6 +82,7 @@ func _build_stairs() -> void:
 			var xf := Transform3D(Basis.IDENTITY, Vector3(side * STAIR_MODULE_W * k, 0.0, origin_z))
 			var vis := STAIR_MODULE.instantiate() as Node3D
 			vis.transform = xf
+			_to_region_palette(vis)
 			terraces.add_child(vis)
 			if col_scene:
 				var col := col_scene.instantiate() as Node3D
@@ -134,6 +125,31 @@ func _build_stairs() -> void:
 	_solid_wedge(FLIGHT_HALF_W, FLIGHT_START_Z, STAIR_TOP_Z, 0.0, 0.0, STAIR_RISE, null)
 
 
+## The module ships in the crimson of another region. Here crimson belongs to the eyes
+## alone, so its stone is recoloured in the Watcher's ultraviolet blacks (bone stays).
+const _STAIR_RECOLOUR := {
+	&"crimson_1": Color(0.17, 0.13, 0.28),
+	&"crimson_2": Color(0.14, 0.105, 0.24),
+	&"crimson_3": Color(0.12, 0.09, 0.21),
+	&"crimson_lo": Color(0.09, 0.07, 0.16),
+	&"crimson_lolo": Color(0.06, 0.045, 0.11),
+}
+
+
+func _to_region_palette(n: Node) -> void:
+	for mi: MeshInstance3D in n.find_children("*", "MeshInstance3D", true, false):
+		for i in mi.mesh.get_surface_count():
+			var src := mi.mesh.surface_get_material(i)
+			if src == null or not _STAIR_RECOLOUR.has(StringName(src.resource_name)):
+				continue
+			var key := "stair_" + src.resource_name
+			if not _mats.has(key):
+				var m := (src as BaseMaterial3D).duplicate() as BaseMaterial3D
+				m.albedo_color = _STAIR_RECOLOUR[StringName(src.resource_name)]
+				_mats[key] = m
+			mi.set_surface_override_material(i, _mats[key])
+
+
 func _hide_meshes(n: Node) -> void:
 	if n is MeshInstance3D:
 		(n as MeshInstance3D).visible = false
@@ -141,77 +157,23 @@ func _hide_meshes(n: Node) -> void:
 		_hide_meshes(c)
 
 
-# --- The bust: shoulders, chest, lapels, collar, knot ---------------------------
+# --- The upper plain -----------------------------------------------------------
 
-func _build_bust() -> void:
-	var suit := _suit_mat()
-	var lapel := _mat("lapel", Color(0.2, 0.19, 0.24))
-	var shirt := _mat("shirt", Color(0.85, 0.82, 0.86))
-	var knot := _mat("knot", Color(0.25, 0.14, 0.6))
-	# Shoulders: one plateau from the top of the stairs to behind his head.
-	_solid_wedge(SHOULDER_HALF_W, STAIR_TOP_Z, BACK_Z, 0.0, SHOULDER_Y, SHOULDER_Y, suit)
-	# Chest: a long slope up to the collar.
-	_solid_wedge(CHEST_HALF_W, CHEST_LOW_Z, CHEST_TOP_Z, SHOULDER_Y, SHOULDER_Y, COLLAR_Y, suit)
-	# Collar: where the chin rests, wide enough to walk around the head.
-	_solid_wedge(COLLAR_HALF_W, CHEST_TOP_Z, BACK_Z, SHOULDER_Y, COLLAR_Y, COLLAR_Y, suit)
-	# Lapels rise on both sides of the chest, walls that funnel the road.
-	for side in [-1.0, 1.0]:
-		var lap := _solid_wedge(120.0, CHEST_LOW_Z, CHEST_TOP_Z, SHOULDER_Y, SHOULDER_Y + 10.0, COLLAR_Y + 40.0, lapel)
-		lap.position.x = (CHEST_HALF_W + 120.0) * side
-		# Shirt collar wings either side of the knot.
-		var wing := _solid_wedge(70.0, CHEST_TOP_Z + 60.0, CHEST_TOP_Z - 40.0, COLLAR_Y, COLLAR_Y + 4.0, COLLAR_Y + 30.0, shirt)
-		wing.position.x = 110.0 * side
-	# The knot, under the chin, where the road ends.
-	var k := _solid_wedge(20.0, FOOT.z - 25.0, FOOT.z - 60.0, COLLAR_Y, COLLAR_Y + 14.0, COLLAR_Y + 18.0, knot)
-	k.name = "Knot"
+## The grid lifted onto a mesa. The room gives `upper_grid` the floor's grid material.
+var upper_grid: MeshInstance3D
 
 
-func _suit_mat() -> ShaderMaterial:
-	if not _mats.has("suit"):
-		var m := ShaderMaterial.new()
-		m.shader = preload("res://rooms/watching_face/suit.gdshader")
-		_mats["suit"] = m
-	return _mats["suit"]
-
-
-# --- The tie road -------------------------------------------------------------
-
-func _build_tie_road() -> void:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var z_start := STAIR_TOP_Z
-	var z_end := FOOT.z + 10.0
-	var segments := 160
-	for i in segments:
-		var za := lerpf(z_start, z_end, float(i) / segments)
-		var zb := lerpf(z_start, z_end, float(i + 1) / segments)
-		var wa := _tie_half_width(za)
-		var wb := _tie_half_width(zb)
-		var ya := ground_height(0.0, za) + 0.08
-		var yb := ground_height(0.0, zb) + 0.08
-		var a0 := Vector3(-wa, ya, za)
-		var a1 := Vector3(wa, ya, za)
-		var b0 := Vector3(-wb, yb, zb)
-		var b1 := Vector3(wb, yb, zb)
-		for v in [[a0, 0.0], [b0, 0.0], [a1, 1.0], [a1, 1.0], [b0, 0.0], [b1, 1.0]]:
-			st.set_uv(Vector2(v[1], 0.0))
-			st.add_vertex(v[0])
-	st.generate_normals()
-	var mi := MeshInstance3D.new()
-	mi.name = "TieRoad"
-	mi.mesh = st.commit()
-	var m := ShaderMaterial.new()
-	m.shader = preload("res://rooms/watching_face/road.gdshader")
-	m.render_priority = 1
-	mi.material_override = m
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(mi)
-
-
-## The tie: a wide blade at the bottom of his chest, narrowing up to the knot.
-func _tie_half_width(z: float) -> float:
-	var k := clampf((STAIR_TOP_Z - z) / (STAIR_TOP_Z - FOOT.z), 0.0, 1.0)
-	return lerpf(34.0, 16.0, k)
+func _build_upper_plain() -> void:
+	var cliff := _mat("cliff", Color(0.06, 0.04, 0.1))
+	_solid_wedge(UPPER_HALF_W, STAIR_TOP_Z, BACK_Z, 0.0, UPPER_Y, UPPER_Y, cliff)
+	upper_grid = MeshInstance3D.new()
+	upper_grid.name = "UpperGrid"
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(UPPER_HALF_W * 2.0, STAIR_TOP_Z - BACK_Z)
+	upper_grid.mesh = pm
+	upper_grid.position = Vector3(0, UPPER_Y + 0.05, (STAIR_TOP_Z + BACK_Z) * 0.5)
+	upper_grid.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(upper_grid)
 
 
 # --- Cover: microphone masts and telephones -----------------------------------
@@ -225,10 +187,8 @@ func _raise_cover() -> void:
 	var tries := 0
 	while masts_left + phones_left > 0 and tries < 20000:
 		tries += 1
-		var p := Vector2(rng.randf_range(-320.0, 320.0), rng.randf_range(FOOT.z + 40.0, 680.0))
-		# Keep the road itself and the stairs' flight open; cover stands beside them.
-		if absf(p.x) < _tie_half_width(p.y) + 6.0 and p.y < STAIR_TOP_Z:
-			continue
+		var p := Vector2(rng.randf_range(-320.0, 320.0), rng.randf_range(COVER_BACK_Z, 1040.0))
+		# Keep the stairs' flight open; cover stands on the plains.
 		if p.y > STAIR_TOP_Z and p.y < STAIR_BOTTOM_Z:
 			continue
 		# An open avenue from the spawn to the foot of the stairs.

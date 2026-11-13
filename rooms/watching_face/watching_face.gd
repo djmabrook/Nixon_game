@@ -2,9 +2,11 @@ extends Room
 ## The Watcher's mountain. Rule: things only move when nobody is looking.
 ##
 ## The little man crosses an open grid, climbs a staircase as wide as the horizon to the
-## Watcher's shoulders, and walks up his tie, a striped road on his chest, to the collar
-## under his chin. The face is frozen while any of it is on screen; out of view (looked away
-## from, or hidden by a mast or a telephone) it slides toward him over the land. Its stare
+## upper plain where the Watcher sits, a bust the size of a mountain. While any of the head
+## is on screen he is frozen; out of view (looked away from, or hidden by a mast or a
+## telephone) the whole mountain slides toward him over the grid. Once the little man sets
+## foot on him (the tie is a road from the grid up to a landing under his chin) he cannot
+## move at all; only the stare is left. Its stare
 ## slows him and drains the ink from the picture. Caught, he turns to a small grey statue,
 ## the world flashes to the Negative, and the moment rewinds.
 ##
@@ -14,12 +16,20 @@ extends Room
 ##                            slide toward the face. Stand still and he slides.
 ##   crimson (hold interact) lay the black disc; standing on it is a blind spot for the stare.
 ##
-## The ending: at the knot under his chin, he raises the ember (tap interact). The lids come
-## down, the red targets go out, the drone and heartbeat stop and the ultraviolet drains from
-## the sky. He walks on past the face, off screen and behind him, and nothing moves. The black
-## disc beyond the head takes him home.
+## The ending: on the landing under his chin, he raises the ember (tap interact). The lids
+## come down, the red targets go out, the drone and heartbeat stop and the ultraviolet drains
+## from the sky. He climbs the railed ledge up the lapel in silence, out onto the shoulder,
+## and walks past the head. The black disc on the shoulder behind it takes him home.
 
 const BRAND := preload("res://rooms/watching_face/models/brand.glb")
+
+## Points on the climbable Watcher, in his model's own units (x50 in the room).
+## The landing where the tie road ends under his chin: raise the ember here.
+const FOOT_POINT := Vector3(0, 2.22, 2.79)
+## On the +X shoulder plateau, behind the line of the head: the black disc home.
+const EXIT_POINT := Vector3(4.4, 3.47, -0.6)
+## Where the lapel ledge steps off onto the plateau: the camera pulls wide here.
+const PLATEAU_POINT := Vector3(2.9, 3.47, 0.6)
 
 const INK_EMBER := &"ember"
 const INK_SALMON := &"salmon"
@@ -27,6 +37,8 @@ const INK_CRIMSON := &"crimson"
 
 ## Speed multiplier at full stare (walk and run).
 @export_range(0.1, 1.0) var stare_slow := 0.38
+## Lens for the opening reveal (degrees), eased back to camera_fov afterwards.
+@export var opening_fov := 16.0
 ## Seconds of the stone-and-Negative beat before the rewind.
 @export var catch_reset_delay := 2.0
 
@@ -67,6 +79,7 @@ var _disc: Node3D
 var _last_tile := Vector3.INF
 var _effective_stare := 0.0
 var _sky_mat: ShaderMaterial
+var _plateau_shot := false
 
 
 func _ready() -> void:
@@ -80,8 +93,19 @@ func _ready() -> void:
 	var env: Environment = $WorldEnvironment.environment
 	_sky_mat = env.sky.sky_material
 	_sky_mat.set_shader_parameter(&"awake", 1.0)
+	land.upper_grid.material_override = floor_mat
 	face.ground_provider = land.ground_height
-	audio.setup(face, land._tie_half_width)
+	face.roam_max_z = land.STAIR_TOP_Z - 450.0
+	audio.setup(face, face.is_on_body)
+	# The landing, the plateau vista and the disc home are on him, so they ride with him.
+	_pin_to_face(foot, FOOT_POINT)
+	_pin_to_face($ExitDisc, EXIT_POINT)
+	_pin_to_face($PlateauVista, PLATEAU_POINT)
+
+
+func _pin_to_face(node: Node3D, native: Vector3) -> void:
+	node.reparent(face, false)
+	node.global_position = face.model_point(native)
 
 
 func _on_room_entered(_spawn: StringName) -> void:
@@ -94,11 +118,24 @@ func _on_room_entered(_spawn: StringName) -> void:
 	foot.body_entered.connect(_on_foot_body.bind(true))
 	foot.body_exited.connect(_on_foot_body.bind(false))
 	exit_disc.body_entered.connect(_on_exit_disc_entered)
+	(face.get_node(^"PlateauVista") as Area3D).body_entered.connect(_on_plateau)
 	floor_mat.set_shader_parameter(&"face_radius", face.head_radius())
 	# The reveal: pull far back so he is a speck on the grid, and the Watcher opens his eyes.
 	face.open_eyes(3.0)
 	if DisplayServer.get_name() != "headless":
-		Game.camera.play_vista(face.centre(), 80.0, 2.5, 2.5)
+		_opening_shot()
+
+
+## The reveal, on a long lens: from far back the telephoto stacks the stairs, the grid and
+## the mountain together, so the head fills a third of the frame over a speck of a man.
+## Then the lens eases back to the room's own.
+func _opening_shot() -> void:
+	var cam := Game.camera
+	cam.set_base_fov(opening_fov)
+	await cam.play_vista(face.centre(), 80.0, 2.5, 2.5)
+	if not is_instance_valid(cam) or not is_inside_tree():
+		return
+	create_tween().set_trans(Tween.TRANS_SINE).tween_method(cam.set_base_fov, opening_fov, camera_fov, 3.0)
 
 
 ## True if the little man has brought this ink home. The room is locked until all three
@@ -188,7 +225,7 @@ func _physics_process(delta: float) -> void:
 		if player.global_position.distance_to(_last_tile) > 2.4:
 			_last_tile = player.global_position
 			_bloom_tile(player.global_position)
-	elif player.is_on_floor():
+	elif player.is_on_floor() and not face.is_on_body(player.global_position):
 		var to_face := face.global_position - player.global_position
 		to_face.y = 0.0
 		if to_face.length() > 1.0:
@@ -332,9 +369,29 @@ func raise_ember() -> void:
 	fire.global_position = Game.player.global_position + Vector3.UP * 2.0
 	var light := fire.get_node(^"Light") as OmniLight3D
 	create_tween().tween_property(light, "omni_range", 400.0, 3.0)
-	Game.camera.play_shot(Game.player.global_position + Vector3(30, 8, 40), face.centre(), 3.0, 2.0)
+	# Low under the chin, tilted up: the brow and the eyes hang straight overhead as they shut.
+	var out := (Game.player.global_position - face.global_position) * Vector3(1, 0, 1)
+	Game.camera.play_shot(Game.player.global_position + out.normalized() * 14.0 + Vector3.UP * 2.0,
+			face.model_point(Vector3(0, 8.2, 1.4)), 3.0, 2.0)
 	audio.eyes_close(face.centre())
 	create_tween().tween_method(func(v): _sky_mat.set_shader_parameter(&"awake", v), 1.0, 0.0, 6.0)
+
+
+## Out on his shoulder after the eyes close: pull far out to the side, so the little man is
+## a speck on the plateau beside the profile of the sleeping head.
+func _on_plateau(body: Node3D) -> void:
+	if not body is Player or not _ended or _plateau_shot:
+		return
+	_plateau_shot = true
+	var p := body.global_position
+	var side := (p - face.centre()) * Vector3(1, 0, 1)
+	side = side.normalized() if side.length() > 1.0 else Vector3.RIGHT
+	var fwd := (face.model_point(Vector3(0, 0, 1)) - face.model_point(Vector3.ZERO)).normalized()
+	var from := p + side * 300.0 + fwd * 120.0 + Vector3.UP * 70.0
+	body.controls_enabled = false
+	await Game.camera.play_shot(from, p.lerp(face.centre(), 0.45), 4.0, 3.0)
+	if is_instance_valid(body):
+		body.controls_enabled = true
 
 
 func _on_foot_body(body: Node3D, inside: bool) -> void:

@@ -25,7 +25,7 @@ func _ready() -> void:
 	var player := Game.player
 	_check(room.room_id == ROOM, "entered room")
 	_check(cam.focus_target == face, "face is the camera's focus")
-	_check(face.head_radius() > 150.0 and face.model != null, "the Watcher model, mountain sized")
+	_check(face.head_radius() > 120.0 and face.model != null, "the Watcher model, mountain sized")
 	var snd := get_node_or_null(^"/root/Sound")
 	if snd:
 		_check(room.audio.has_shared_sound(), "uses the shared Sound system (broadcast, grind, bed)")
@@ -33,7 +33,23 @@ func _ready() -> void:
 	face.wake_delay = 0.0
 	face._awake_in = 0.0
 	await _frames(5)
-	_check(absf(face.global_position.y - (200.0 + face.ride_height)) < 1.0, "face rests on the collar")
+	_check(absf(face.global_position.y - land.UPPER_Y) < 1.0, "the Watcher sits on the upper plain")
+	_check(face.climb_body != null, "the Watcher is climbable (his own collision)")
+	for pin in [["Foot", 12.0], ["ExitDisc", 2.0]]:
+		var at: Vector3 = room.find_child(pin[0], true, false).global_position
+		var q := PhysicsRayQueryParameters3D.create(at + Vector3.UP * 2.0, at + Vector3.DOWN * (pin[1] + 6.0), 1)
+		var hit := room.get_world_3d().direct_space_state.intersect_ray(q)
+		_check(not hit.is_empty() and hit.collider == face.climb_body, "%s stands on him (y=%.0f)" % [pin[0], at.y])
+
+	# His tie is a road from the grid: halfway up, he stands on the Watcher, who cannot move.
+	var tie_mid := face.model_point(Vector3(0, 0.9, 5.0))
+	_place(player, tie_mid + Vector3.UP * 4.0)
+	await _frames(60)
+	_check(face.is_on_body(player.global_position), "the tie road carries him (y=%.0f)" % player.global_position.y)
+	_look_away(cam, face, player)
+	var on_him_at := face.global_position
+	await _seconds(1.0)
+	_check(not face.is_watched and face.global_position.distance_to(on_him_at) < 0.01, "standing on him, he cannot move")
 
 	# The flight is walkable: drop him halfway up and he stands about 45 m high.
 	var mid_z: float = (land.FLIGHT_START_Z + land.STAIR_TOP_Z) * 0.5
@@ -117,7 +133,13 @@ func _ready() -> void:
 	# Caught: a grey statue, the Negative, then the rewind.
 	var old_id := room.get_instance_id()
 	face.held = false
-	face.global_position = player.global_position + Vector3(10, 0, 0)
+	# The stairs are the threshold: he can only be reached up on the upper plain.
+	_place(player, Vector3(0, 92, 300))
+	await _frames(10)
+	var reach := (player.global_position - face.catch_world_point()) * Vector3(1, 0, 1)
+	face.global_position += reach - reach.normalized() * 50.0
+	_look_away(cam, face, player)
+	await _until(func(): return room._caught, 5.0)
 	await _frames(3)
 	var stone := false
 	for mi in player.find_children("*", "MeshInstance3D", true, false):
@@ -136,7 +158,7 @@ func _ready() -> void:
 	cam = Game.camera
 	face.wake_delay = 0.0
 	face._awake_in = 0.0
-	_place(player, room.get_node("Foot").global_position + Vector3(0, 2, 10))
+	_place(player, room.find_child("Foot", true, false).global_position)
 	await _frames(15)
 	room.tap()
 	await _seconds(1.0)
@@ -148,7 +170,7 @@ func _ready() -> void:
 	if snd:
 		await _seconds(4.5)
 		_check(snd.call(&"is_hushed"), "and the world falls silent but his steps")
-	_place(player, room.get_node("ExitDisc").global_position + Vector3(0, 2, 0))
+	_place(player, room.find_child("ExitDisc", true, false).global_position + Vector3(0, 2, 0))
 	await _seconds(0.6)
 	_check(Game.is_completed(ROOM), "the black disc beyond the face completes the room")
 	await _until(func(): return Game.current_room.room_id == Game.HUB_ID and not Game.is_travelling(), 8.0)

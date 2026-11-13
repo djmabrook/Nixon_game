@@ -34,6 +34,12 @@ signal eyes_closed
 @export var acceleration := 3.0
 ## Horizontal distance at which it has the player.
 @export var catch_radius := 280.0
+## Model-space point the catch is measured from, if the model is a landscape (the tie tip).
+## When the model carries its own collision he can stand on, the face is held while he is on
+## it, and it only catches him by arriving: while it moves, within catch_radius of this point.
+@export var catch_point := Vector3.ZERO
+## The face never slides its origin past this world z (keeps a mountain off the stairs).
+@export var roam_max_z := INF
 ## Seconds after the room starts before it may move.
 @export var wake_delay := 2.0
 ## Set false to freeze it for good (after the room is won, in cutscenes).
@@ -106,6 +112,8 @@ var _model_radius := 0.0
 var _lids: Array[Node3D] = []
 var _glows: Array[Sprite3D] = []
 var _track_eyes := true
+## The model's own walkable collision, if it has one (a climbable Watcher).
+var climb_body: CollisionObject3D
 
 @onready var visual: Node3D = $Visual
 
@@ -125,7 +133,7 @@ func _ready() -> void:
 			var eye := visual.find_child(String(eye_name), true, false) as Node3D
 			if eye:
 				_eyes.append(eye)
-	if solid and not distant:
+	if solid and not distant and climb_body == null:
 		_add_body()
 	if distant:
 		active = false
@@ -239,16 +247,46 @@ func _physics_process(delta: float) -> void:
 		return
 
 	_awake_in -= delta
-	if is_watched or held or _awake_in > 0.0:
+	var on_him := is_on_body(player.global_position)
+	if is_watched or held or on_him or _awake_in > 0.0:
 		# The rule: when seen, it is a statue. No easing, no drift. It just stops.
+		# A mountain he is standing on never moves either.
 		_velocity = Vector3.ZERO
 		motion = 0.0
 	else:
 		_hunt(player, delta)
 
-	if flat_distance_to(player.global_position) < catch_radius:
+	var reached := false
+	if climb_body:
+		reached = motion > 0.0 and not on_him and _flat(player.global_position, catch_world_point()) < catch_radius
+	else:
+		reached = flat_distance_to(player.global_position) < catch_radius
+	if reached:
 		_caught = true
 		caught_player.emit()
+
+
+## Where catch_point is in the world.
+func catch_world_point() -> Vector3:
+	return visual.to_global(catch_point) if climb_body else global_position
+
+
+## A point in the model's own units, in the world (for things placed on a climbable model).
+func model_point(native: Vector3) -> Vector3:
+	return visual.to_global(native)
+
+
+## Is this point standing on the face's own body (its walkable collision)?
+func is_on_body(p: Vector3) -> bool:
+	if climb_body == null:
+		return false
+	var q := PhysicsRayQueryParameters3D.create(p + Vector3.UP * 0.5, p + Vector3.DOWN * 3.0, 1)
+	var hit := get_world_3d().direct_space_state.intersect_ray(q)
+	return not hit.is_empty() and hit.collider == climb_body
+
+
+func _flat(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x - b.x, a.z - b.z).length()
 
 
 ## Horizontal distance from the face to a point.
@@ -267,6 +305,12 @@ func retreat() -> void:
 ## Called by the room when the player is caught: the face drops onto him.
 func lunge(target: Vector3) -> void:
 	var t := create_tween().set_parallel().set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_IN)
+	if climb_body:
+		# A mountain does not leap: it heaves the last stretch and bows its head over him.
+		var reach := (target - catch_world_point()) * Vector3(1, 0, 1)
+		t.tween_property(self, "global_position", global_position + reach, 0.7)
+		t.tween_property(visual, "rotation_degrees:x", -12.0, 0.7)
+		return
 	var to := target + (Vector3.UP * head_radius() * 0.4 if model == null else Vector3.ZERO)
 	to.y = maxf(to.y, global_position.y - 40.0) if model else to.y
 	t.tween_property(self, "global_position", global_position.lerp(to, 0.8), 0.7)
@@ -297,6 +341,8 @@ func _update_watched(cam: Camera3D) -> void:
 			continue
 		# Inside the view. Is something standing in the way?
 		var query := PhysicsRayQueryParameters3D.create(cam.global_position, p, 1)
+		if climb_body:
+			query.exclude = [climb_body.get_rid()]
 		if space.intersect_ray(query).is_empty():
 			seen = true
 			break
@@ -316,6 +362,8 @@ func _hunt(player: Player, delta: float) -> void:
 	var desired := to_player.normalized() * chase_speed if to_player.length() > 0.01 else Vector3.ZERO
 	_velocity = _velocity.move_toward(desired, acceleration * delta)
 	var step := _velocity * delta
+	if global_position.z + step.z > roam_max_z:
+		step.z = minf(step.z, maxf(roam_max_z - global_position.z, 0.0))
 	global_position += step
 	_moved_unseen += step.length()
 	motion = clampf(_velocity.length() / chase_speed, 0.0, 1.0)
@@ -330,8 +378,12 @@ func _hunt(player: Player, delta: float) -> void:
 
 
 func _update_sight(player: Player, delta: float) -> void:
-	var from := _eye_centre()
 	var to := player.global_position + Vector3.UP * 0.8
+	var from := _eye_centre()
+	if climb_body:
+		# Start just out in front of the eyes so the stare clears the stone around them,
+		# but his own brow, chest and shoulders still hide a man standing under them.
+		from += (to - from).normalized() * model_scale * 0.5
 	var sees := not _closed and from.distance_to(to) <= sight_range
 	if sees:
 		var query := PhysicsRayQueryParameters3D.create(from, to, 1)  # world layer only
@@ -386,6 +438,19 @@ func _build_model() -> void:
 	_centre_offset = Vector3(0, aabb.size.y * 0.5 * model_scale, 0)
 	_model_radius = maxf(aabb.size.x, aabb.size.y) * 0.5 * model_scale
 	_track_eyes = false
+	for body in m.find_children("*", "StaticBody3D", true, false):
+		climb_body = body as CollisionObject3D
+		climb_body.collision_layer = 1
+		climb_body.add_to_group(&"watcher_body")
+		break
+	if climb_body:
+		# The visible bulk is the head: measure the head, not the whole mountain.
+		var head := m.find_child("Mesh_0", true, false) as MeshInstance3D
+		if head:
+			var hb := head.get_aabb()
+			var top := hb.position.y + hb.size.y
+			_centre_offset = Vector3(0, (top - hb.size.y * 0.25) * model_scale, 0)
+			_model_radius = hb.size.y * 0.22 * model_scale
 	for eye_name in ["eye_L", "eye_R"]:
 		var eye := m.find_child(eye_name, true, false) as Node3D
 		if eye == null:

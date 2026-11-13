@@ -6,7 +6,7 @@
 [ext_resource type="Script" path="res://core/room_exit.gd" id="exit"]
 [ext_resource type="Script" path="res://core/vista_zone.gd" id="vista"]
 [ext_resource type="PackedScene" path="res://boss/face_boss.tscn" id="face"]
-[ext_resource type="PackedScene" path="res://boss/models/watcher_bust_v2.glb" id="bust"]
+[ext_resource type="PackedScene" path="res://boss/models/watcher_bust_v2_climb.glb" id="bust"]
 [ext_resource type="PackedScene" path="res://boss/models/eyelid_L.glb" id="lid_l"]
 [ext_resource type="PackedScene" path="res://boss/models/eyelid_R.glb" id="lid_r"]
 [ext_resource type="Shader" path="res://rooms/watching_face/grid.gdshader" id="grid"]
@@ -48,10 +48,10 @@ subdivide_depth = 8
 size = Vector3(8000, 2, 8000)
 
 [sub_resource type="BoxShape3D" id="wall_x"]
-size = Vector3(2, 600, 2200)
+size = Vector3(2, 1200, 2400)
 
 [sub_resource type="BoxShape3D" id="wall_z"]
-size = Vector3(1700, 600, 2)
+size = Vector3(1700, 1200, 2)
 
 [sub_resource type="BoxShape3D" id="foot_shape"]
 size = Vector3(70, 24, 50)
@@ -79,6 +79,9 @@ material = SubResource("ring_mat")
 inner_radius = 18.6
 outer_radius = 19.6
 rings = 96
+
+[sub_resource type="BoxShape3D" id="plateau_shape"]
+size = Vector3(60, 20, 60)
 
 [sub_resource type="BoxShape3D" id="vista_shape"]
 size = Vector3(1400, 20, 20)
@@ -138,11 +141,11 @@ script = ExtResource("land")
 [node name="Bounds" type="StaticBody3D" parent="."]
 
 [node name="West" type="CollisionShape3D" parent="Bounds"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -830, 300, -280)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -830, 300, -120)
 shape = SubResource("wall_x")
 
 [node name="East" type="CollisionShape3D" parent="Bounds"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 830, 300, -280)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 830, 300, -120)
 shape = SubResource("wall_x")
 
 [node name="North" type="CollisionShape3D" parent="Bounds"]
@@ -150,12 +153,13 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 300, -1310)
 shape = SubResource("wall_z")
 
 [node name="South" type="CollisionShape3D" parent="Bounds"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 300, 780)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 300, 1070)
 shape = SubResource("wall_z")
 
 [node name="FaceBoss" parent="." instance=ExtResource("face")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 200, -800)
-catch_radius = 300.0
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 90, -800)
+catch_radius = 40.0
+catch_point = Vector3(0, 0, 7.33)
 model_scale = 50.0
 model = ExtResource("bust")
 eyelid_left = ExtResource("lid_l")
@@ -192,7 +196,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.1, 0)
 mesh = SubResource("ring_mesh")
 
 [node name="StairTopVista" type="Area3D" parent="." node_paths=PackedStringArray("look_target")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 90, 300)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 90, 420)
 script = ExtResource("vista")
 look_target = NodePath("../FaceBoss")
 pull_back = 120.0
@@ -200,13 +204,21 @@ pull_back = 120.0
 [node name="Shape" type="CollisionShape3D" parent="StairTopVista"]
 shape = SubResource("vista_shape")
 
+[node name="PlateauVista" type="Area3D" parent="."]
+collision_layer = 4
+collision_mask = 2
+monitorable = false
+
+[node name="Shape" type="CollisionShape3D" parent="PlateauVista"]
+shape = SubResource("plateau_shape")
+
 [node name="from_hub" type="Marker3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 640)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 980)
 script = ExtResource("spawn")
 is_default = true
 
 [node name="ExitToHub" type="Area3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 655)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 995)
 script = ExtResource("exit")
 
 [node name="Shape" type="CollisionShape3D" parent="ExitToHub"]

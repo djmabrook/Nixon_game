@@ -22,7 +22,7 @@ var _seen_once := false
 
 
 ## Call from the room's _ready, after the face and land exist.
-func setup(face: Node3D, road_half_width: Callable) -> void:
+func setup(face: Node3D, on_felt: Callable) -> void:
 	_sound = get_node_or_null(^"/root/Sound")
 	_synth = get_node_or_null(synth_path)
 	if _sound == null:
@@ -35,9 +35,9 @@ func setup(face: Node3D, road_half_width: Callable) -> void:
 	room_audio.set(&"surface", &"stone")
 	room_audio.set(&"lateness", 1.5)
 	add_child(room_audio)
-	# Felt underfoot on the tie road, stone everywhere else.
+	# Felt underfoot on the Watcher himself (his tie, his lapel), stone everywhere else.
 	_sound.set(&"surface_resolver", func(pos: Vector3) -> StringName:
-		return &"felt" if absf(pos.x) < road_half_width.call(pos.z) else &"stone")
+		return &"felt" if on_felt.call(pos) else &"stone")
 	_broadcast = load(BROADCAST).new()
 	_broadcast.set(&"spatial", false)
 	_broadcast.set(&"drains_world", true)

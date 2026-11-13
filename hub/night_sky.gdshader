@@ -50,7 +50,7 @@ void sky() {
 	}
 	// The painted night strip. Drained it is only its light and dark, in bone haze.
 	float az = atan(EYEDIR.z, EYEDIR.x);
-	vec2 suv = vec2((az / TAU + 0.5) * strip_repeat, 1.0 - clamp(y / strip_height, 0.0, 1.0));
+	vec2 suv = vec2((az / TAU + 0.5) * strip_repeat, clamp(1.0 - y / strip_height, 0.001, 0.999));  // clamped: the strips repeat sideways only
 	float strip_mask = step(0.0, y) * (1.0 - smoothstep(strip_height * 0.75, strip_height, y)) * strip_amount;
 	vec3 nt = textureLod(night_strip, suv, 0.0).rgb;
 	float nl = dot(nt, vec3(0.3, 0.59, 0.11));
@@ -64,7 +64,7 @@ void sky() {
 
 	// Dawn is the painted dawn strip stretched up the whole sky (its top row is the zenith),
 	// with no smooth gradient, so it keeps its dither and its palette.
-	vec2 duv = vec2(suv.x, 1.0 - clamp(y / dawn_strip_height, 0.0, 1.0));
+	vec2 duv = vec2(suv.x, clamp(1.0 - y / dawn_strip_height, 0.001, 0.999));
 	vec3 day = textureLod(dawn_strip, duv, 0.0).rgb;
 	vec3 sd = normalize(sun_dir);
 	float sun_dot = max(dot(EYEDIR, sd), 0.0);

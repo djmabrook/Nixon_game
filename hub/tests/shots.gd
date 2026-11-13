@@ -36,6 +36,14 @@ func _ready() -> void:
 		return
 	await _wait(1.5)
 	await _shot(state + "_beach")
+	# The arch, from where you arrive.
+	var arch: Vector3 = hub.get_node("Art/StrataArch").global_position
+	var adir := Vector3(arch.x, 0, arch.z).normalized()
+	var side := adir.cross(Vector3.UP)
+	Game.camera.play_shot(arch + adir * 70.0 + side * 90.0 + Vector3(0, 10, 0), arch + Vector3(0, 35, 0), 1.5, 0.1)
+	await _wait(1.0)
+	await _shot(state + "_arch")
+	await _wait(1.0)
 	await _at(hub, 495.0, state + "_rim")
 	# The door at the end of groove 0, from in front of it.
 	var door: Vector3 = hub.stakes()[0].global_position
@@ -49,12 +57,6 @@ func _ready() -> void:
 	Game.camera.play_shot(away, wp + Vector3(0, 250, 0), 6.0, 0.1)
 	await _wait(1.5)
 	await _shot(state + "_watcher")
-	# The arch, from where you arrive.
-	var arch: Vector3 = hub.get_node("Art/StrataArch").global_position
-	var adir := Vector3(arch.x, 0, arch.z).normalized()
-	Game.camera.play_shot(arch + adir * 110.0 + Vector3(0, 8, 0), arch + Vector3(0, 30, 0) - adir * 50.0, 6.0, 0.1)
-	await _wait(1.5)
-	await _shot(state + "_arch")
 	Game.camera.play_shot(hub.get_node("Vortex").global_position + Vector3(260, 300, 260), hub.get_node("Vortex").global_position, 5.0, 0.5)
 	await _wait(1.5)
 	await _shot(state + "_eye")

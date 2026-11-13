@@ -169,6 +169,9 @@ func _build() -> void:
 	_cutout(far, "horizon_palm_colossi", 2600.0, 165.0, 5000.0, 140.0)
 	_cutout(far, "horizon_palm_colossi", 2700.0, 268.0, 4400.0, 130.0)
 	_cutout(far, "far_statues", 1700.0, 95.0, 900.0, 40.0)
+	# Low mesas ringing the sea, between the bigger landmarks.
+	for deg in [22.0, 108.0, 178.0, 292.0]:
+		_cutout(far, "horizon_mesa_ring", 2500.0, deg, 4800.0, 20.0)
 
 	# The black disc: a flat black circle hanging in the sky.
 	var d := _group("BlackDisc")

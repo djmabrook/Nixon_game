@@ -28,12 +28,29 @@ const PALM_ISLET := preload("res://hub/art/models/palm_islet.glb")
 	Vector2(1150.0, 236.0), Vector2(1100.0, 290.0),
 ]
 
+const DAWN_RUST := Color(0.29, 0.12, 0.07)
+
 var color_amount := 0.0:
 	set(v):
 		color_amount = v
-		Palette.apply(_entries, v)
+		_refresh()
+## 0 night to 1 dawn: the palms go dark rust silhouettes against the dawn.
+var dawn := 0.0:
+	set(v):
+		dawn = v
+		_refresh()
 
 var _entries: Array = []
+var _palm_entries: Array = []
+
+
+func _refresh() -> void:
+	Palette.apply(_entries, color_amount)
+	Palette.apply(_palm_entries, color_amount)
+	if dawn > 0.0:
+		for e in _palm_entries:
+			var m: StandardMaterial3D = e[0]
+			m.albedo_color = m.albedo_color.lerp(DAWN_RUST, dawn)
 
 
 func _ready() -> void:
@@ -79,12 +96,18 @@ func _ready() -> void:
 	for s in shallows:
 		_islet(_polar(s.x, s.y) + Vector3(0, -1.5, 0), rng.randf_range(4.0, 6.5), rng)
 
-	_entries = Palette.prepare(self)
-	Palette.apply(_entries, color_amount)
+	for n in get_children():
+		if n.name.begins_with("ColossalPalm") or n.name.begins_with("PalmIslet"):
+			_palm_entries.append_array(Palette.prepare(n))
+	for n in get_children():
+		if not (n.name.begins_with("ColossalPalm") or n.name.begins_with("PalmIslet")):
+			_entries.append_array(Palette.prepare(n))
+	_refresh()
 
 
 func _islet(at: Vector3, s: float, rng: RandomNumberGenerator) -> void:
 	var p: Node3D = PALM_ISLET.instantiate()
+	p.name = "PalmIslet"
 	add_child(p)
 	p.position = at
 	p.scale = Vector3.ONE * s

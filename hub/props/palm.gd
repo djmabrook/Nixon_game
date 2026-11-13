@@ -23,6 +23,14 @@ extends Node3D
 		color_amount = v
 		_tint()
 
+## 0 night to 1 dawn: at dawn the palm goes dark rust, a silhouette against the light.
+@export_range(0.0, 1.0) var dawn := 0.0:
+	set(v):
+		dawn = v
+		_tint()
+
+const DAWN_RUST := Color(0.29, 0.12, 0.07)
+
 var _trunk_mat: StandardMaterial3D
 var _frond_mat: StandardMaterial3D
 
@@ -99,3 +107,5 @@ func _tint() -> void:
 	var black := Color(0.02, 0.02, 0.02)
 	_trunk_mat.albedo_color = black.lerp(trunk_color, color_amount)
 	_frond_mat.albedo_color = black.lerp(frond_color, color_amount)
+	_trunk_mat.albedo_color = _trunk_mat.albedo_color.lerp(DAWN_RUST, dawn)
+	_frond_mat.albedo_color = _frond_mat.albedo_color.lerp(DAWN_RUST, dawn)

@@ -12,6 +12,8 @@ uniform bool has_drained = false;
 uniform sampler2D tex_dawn : source_color, filter_nearest;
 uniform bool has_dawn = false;
 uniform float dawn = 0.0;
+// Cut-outs with no dawn paint: at dawn their blacks turn dark rust (no black at dawn).
+uniform vec3 dawn_rust : source_color = vec3(0.29, 0.12, 0.07);
 uniform float color_amount = 1.0;
 uniform vec3 drained_dark : source_color = vec3(0.02, 0.02, 0.02);
 uniform vec3 drained_light : source_color = vec3(0.62, 0.58, 0.5);
@@ -42,5 +44,9 @@ void fragment() {
 	col = mix(col, vec3(0.03, 0.01, 0.015), red * eyes_dim);
 	col = mix(col, haze, haze_amount * (1.0 - red));
 	col = mix(col, cd.rgb, dawn_k);
+	if (!has_dawn) {
+		float lum = dot(col, vec3(0.3, 0.59, 0.11));
+		col = mix(col, max(col, dawn_rust), dawn * (1.0 - smoothstep(0.08, 0.3, lum)));
+	}
 	ALBEDO = col * mix(1.0, glow, red);
 }

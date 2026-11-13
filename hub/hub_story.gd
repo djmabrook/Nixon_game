@@ -218,6 +218,7 @@ func _set_dawn(t: float) -> void:
 	_sky_mat.set_shader_parameter("dawn", t)
 	_landmarks.set("watcher_eyes", t < 0.5)
 	_landmarks.set("dawn", t)
+	_sea_mat.set_shader_parameter("dawn", t)
 	for palm in hub.get_node("Scenery").get_children():
 		if palm.get("dawn") != null:
 			palm.set("dawn", t)

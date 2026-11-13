@@ -15,8 +15,11 @@ const CLIPS := {
 	&"climb": ["res://player/model/littleman_climb.glb", true],
 	&"caught": ["res://player/model/littleman_caught.glb", false],
 }
-## His default colour (art direction: rust #a8452a).
+## The colour baked into the model file (mid rust).
 const RUST := Color("a8452a")
+## His default in-game colour: dark rust, so he's the darkest warm silhouette in frame
+## once the dither is on (art direction, 2026-11-12).
+const DEFAULT_TINT := Color("4a1f12")
 
 ## Cross-fade time between clips.
 @export var blend_time := 0.2
@@ -40,6 +43,7 @@ func _ready() -> void:
 	if _library == null:
 		_library = _build_library()
 	anim.add_animation_library(&"lm", _library)
+	set_tint(DEFAULT_TINT)
 	play(&"idle", 0.0)
 
 
@@ -56,14 +60,18 @@ func play(clip: StringName, blend := -1.0, speed := 1.0) -> void:
 	anim.speed_scale = speed
 
 
-## Recolour the whole figure (a region may draw him near-black). Pass RUST to restore.
+## Recolour the whole figure (a region may draw him near-black). reset_tint() restores the default.
 func set_tint(color: Color) -> void:
 	if _tint_mat == null:
 		_tint_mat = StandardMaterial3D.new()
 		_tint_mat.roughness = 1.0
 	_tint_mat.albedo_color = color
 	for m in _meshes:
-		m.material_override = null if color == RUST else _tint_mat
+		m.material_override = _tint_mat
+
+
+func reset_tint() -> void:
+	set_tint(DEFAULT_TINT)
 
 
 ## Shadow casting for every mesh in the model (Player uses SHADOWS_ONLY for the late shadow).

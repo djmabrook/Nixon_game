@@ -118,12 +118,13 @@ saved to `user://save.json` on every change.
 
 ## The little man
 
-`player/model/` holds the approved rigged model (rust #a8452a, no face, faces +Z in the file) and its
+`player/model/` holds the approved rigged model (no face, faces +Z in the file) and its
 clips: `idle`, `walk`, `run`, `carry_idle`, `carry_walk`, `climb`, `caught`. `LittleManModel` merges
 them into one AnimationPlayer; the Player picks idle/walk/run (or the carry versions while
 `Game.carried` is set) and scales playback to ground speed (`walk_anim_speed`, `run_anim_speed`).
 For the Watcher catching him: `Game.player.animation_locked = true`, `Game.player.model.play(&"caught")`.
-A region may recolour him with `Game.player.model.set_tint(Color(...))`; `LittleManModel.RUST` restores it.
+He's drawn dark rust #4a1f12 (`LittleManModel.DEFAULT_TINT`) so he's always the darkest warm silhouette.
+A region may recolour him with `Game.player.model.set_tint(Color(...))`; `reset_tint()` restores the default.
 He always casts a real shadow (the late one), never a blob. Indoors keep `camera_distance` small;
 in open country push it out so he's a few pixels tall.
 

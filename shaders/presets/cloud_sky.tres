@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="DitherLookSettings" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://shaders/dither_look_settings.gd" id="1_settings"]
+
+[resource]
+resource_name = "cloud_sky"
+script = ExtResource("1_settings")
+palette = PackedColorArray(0.04314, 0.04706, 0.03137, 1, 0.1608, 0.1216, 0.1176, 1, 0.2941, 0.2118, 0.2471, 1, 0.3765, 0.4196, 0.4863, 1, 0.4353, 0.1176, 0.09804, 1, 0.6784, 0.2039, 0.1961, 1, 0.5529, 0.2824, 0.3725, 1, 0.7647, 0.4824, 0.5961, 1, 0.6039, 0.6275, 0.8314, 1, 0.7804, 0.7412, 0.7255, 1, 0.8431, 0.8, 0.8118, 1, 0.902, 0.8392, 0.902, 1)
+virtual_height = 360
+dither_spread = 0.25
+bayer_size = 3
+accent_threshold = 0.0
+contrast = 1.05
+brightness = 0.0
+saturation = 1.1
+grain = 0.15
+soft_sampling = true

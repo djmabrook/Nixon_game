@@ -9,13 +9,25 @@ extends Node3D
 ## ground_height(x, z) answers the height of this land anywhere, so the face can ride it
 ## and cover can stand on it without raycasts. Units are metres. Placeholder geometry.
 
+## The staircase is a row of the art's mega stair modules: three 30 m terraces, each module
+## 60.27 m wide and 108.245 m deep, rising toward the face. They are far too tall for him, so
+## a processional flight cuts through the middle slot and runs out onto the plain.
+const STAIR_MODULE := preload("res://rooms/watching_face/models/mega_stair_step.glb")
+const STAIR_MODULE_COL := "res://rooms/watching_face/models/mega_stair_step_col.glb"
+const STAIR_MODULE_W := 60.27
+const STAIR_MODULE_DEPTH := 108.245
+const STAIR_TIER := 30.0
+const STAIR_MODULES_PER_SIDE := 13
 const STAIR_BOTTOM_Z := 560.0
-const STAIR_TOP_Z := 320.0
-const STAIR_RISE := 80.0
-const STAIR_STEPS := 40
-const STAIR_HALF_W := 700.0
+const STAIR_TOP_Z := STAIR_BOTTOM_Z - STAIR_MODULE_DEPTH
+const STAIR_RISE := 90.0
+const STAIR_HALF_W := STAIR_MODULE_W * (STAIR_MODULES_PER_SIDE + 0.5)
+## The flight he climbs: the empty middle slot, reaching 40 m out onto the plain.
+const FLIGHT_HALF_W := 30.0
+const FLIGHT_START_Z := 600.0
+const FLIGHT_STEPS := 60
 
-const SHOULDER_Y := 80.0
+const SHOULDER_Y := STAIR_RISE
 const SHOULDER_HALF_W := 800.0
 const BACK_Z := -1300.0
 
@@ -58,29 +70,75 @@ func ground_height(x: float, z: float) -> float:
 		return lerpf(SHOULDER_Y, COLLAR_Y, (CHEST_LOW_Z - z) / (CHEST_LOW_Z - CHEST_TOP_Z))
 	if ax <= SHOULDER_HALF_W and z <= STAIR_TOP_Z and z >= BACK_Z:
 		return SHOULDER_Y
+	if ax <= FLIGHT_HALF_W and z > STAIR_TOP_Z and z <= FLIGHT_START_Z:
+		return STAIR_RISE * (FLIGHT_START_Z - z) / (FLIGHT_START_Z - STAIR_TOP_Z)
 	if ax <= STAIR_HALF_W and z > STAIR_TOP_Z and z <= STAIR_BOTTOM_Z:
-		return STAIR_RISE * (STAIR_BOTTOM_Z - z) / (STAIR_BOTTOM_Z - STAIR_TOP_Z)
+		return STAIR_TIER * minf(3.0, floorf((STAIR_BOTTOM_Z - z) / (STAIR_MODULE_DEPTH / 3.0)) + 1.0)
 	return 0.0
 
 
 # --- Horizon Hall staircase --------------------------------------------------
 
 func _build_stairs() -> void:
+	# The terraces: one module per slot either side of the flight, visual and collision
+	# instanced with the same transform.
+	var col_scene: PackedScene = load(STAIR_MODULE_COL) if ResourceLoader.exists(STAIR_MODULE_COL) else null
+	var origin_z := STAIR_BOTTOM_Z - STAIR_MODULE_DEPTH * 0.5
+	var terraces := Node3D.new()
+	terraces.name = "Terraces"
+	add_child(terraces)
+	for side in [-1.0, 1.0]:
+		for k in range(1, STAIR_MODULES_PER_SIDE + 1):
+			var xf := Transform3D(Basis.IDENTITY, Vector3(side * STAIR_MODULE_W * k, 0.0, origin_z))
+			var vis := STAIR_MODULE.instantiate() as Node3D
+			vis.transform = xf
+			terraces.add_child(vis)
+			if col_scene:
+				var col := col_scene.instantiate() as Node3D
+				col.transform = xf
+				_hide_meshes(col)
+				terraces.add_child(col)
+			else:
+				for t in 3:
+					var b := StaticBody3D.new()
+					b.transform = xf
+					var cs := CollisionShape3D.new()
+					var box := BoxShape3D.new()
+					var d := STAIR_MODULE_DEPTH * (3 - t) / 3.0
+					box.size = Vector3(STAIR_MODULE_W, STAIR_TIER, d)
+					cs.shape = box
+					cs.position = Vector3(0, STAIR_TIER * (t + 0.5), -STAIR_MODULE_DEPTH * 0.5 + d * 0.5)
+					b.add_child(cs)
+					terraces.add_child(b)
+
+	# A line of light along every terrace nosing, so the three tiers read from kilometres away.
+	var edge := _mat("step_edge", Color(0.6, 0.45, 1.0), true)
+	for t in 3:
+		var z := STAIR_BOTTOM_Z - STAIR_MODULE_DEPTH * t / 3.0 - 1.0
+		for side in [-1.0, 1.0]:
+			var w := STAIR_HALF_W - FLIGHT_HALF_W
+			_visual_box(Vector3(w, 0.35, 0.35), Vector3(side * (FLIGHT_HALF_W + w * 0.5), STAIR_TIER * (t + 1) + 0.1, z), edge)
+
+	# The processional flight: steps he can climb, walked on as a smooth ramp beneath them.
 	var stone_a := _mat("step_a", Color(0.1, 0.08, 0.16))
 	var stone_b := _mat("step_b", Color(0.14, 0.11, 0.22))
-	var edge := _mat("step_edge", Color(0.6, 0.45, 1.0), true)
-	var depth := (STAIR_BOTTOM_Z - STAIR_TOP_Z) / STAIR_STEPS
-	var rise := STAIR_RISE / STAIR_STEPS
-	for i in STAIR_STEPS:
+	var depth := (FLIGHT_START_Z - STAIR_TOP_Z) / FLIGHT_STEPS
+	var rise := STAIR_RISE / FLIGHT_STEPS
+	for i in FLIGHT_STEPS:
 		var top := rise * (i + 1)
-		var z_far := STAIR_BOTTOM_Z - depth * (i + 1)
+		var z_far := FLIGHT_START_Z - depth * (i + 1)
 		var z_near := z_far + depth
-		_visual_box(Vector3(STAIR_HALF_W * 2.0, top, depth), Vector3(0, top * 0.5, (z_far + z_near) * 0.5),
+		_visual_box(Vector3(FLIGHT_HALF_W * 2.0, top, depth), Vector3(0, top * 0.5, (z_far + z_near) * 0.5),
 				stone_a if i % 2 == 0 else stone_b)
-		# A thin line of light on every nosing, so the flight reads from kilometres away.
-		_visual_box(Vector3(STAIR_HALF_W * 2.0, 0.2, 0.2), Vector3(0, top, z_near), edge)
-	# Walk on a smooth ramp under the steps.
-	_solid_wedge(STAIR_HALF_W, STAIR_BOTTOM_Z, STAIR_TOP_Z, 0.0, 0.0, STAIR_RISE, null)
+		_visual_box(Vector3(FLIGHT_HALF_W * 2.0, 0.12, 0.12), Vector3(0, top, z_near), edge)
+	_solid_wedge(FLIGHT_HALF_W, FLIGHT_START_Z, STAIR_TOP_Z, 0.0, 0.0, STAIR_RISE, null)
+
+
+func _hide_meshes(n: Node) -> void:
+	if n is MeshInstance3D:
+		(n as MeshInstance3D).visible = false
+	for c in n.get_children():
+		_hide_meshes(c)
 
 
 # --- The bust: shoulders, chest, lapels, collar, knot ---------------------------

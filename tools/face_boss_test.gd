@@ -35,10 +35,16 @@ func _ready() -> void:
 	await _frames(5)
 	_check(absf(face.global_position.y - (200.0 + face.ride_height)) < 1.0, "face rests on the collar")
 
-	# The staircase is walkable: drop him halfway up and he stands about 40 m high.
-	_place(player, Vector3(0, 42, 440))
+	# The flight is walkable: drop him halfway up and he stands about 45 m high.
+	var mid_z: float = (land.FLIGHT_START_Z + land.STAIR_TOP_Z) * 0.5
+	var mid_y: float = land.ground_height(0.0, mid_z)
+	_place(player, Vector3(0, mid_y + 2.0, mid_z))
 	await _frames(60)
-	_check(absf(player.global_position.y - 40.0) < 2.0, "staircase carries him up (y=%.1f)" % player.global_position.y)
+	_check(absf(player.global_position.y - mid_y) < 2.0, "staircase carries him up (y=%.1f)" % player.global_position.y)
+	# The terraces are solid: dropped onto the first tier beside the flight, he stands on it.
+	_place(player, Vector3(120, 34, 540))
+	await _frames(60)
+	_check(absf(player.global_position.y - 30.0) < 2.0, "terraces are solid (y=%.1f)" % player.global_position.y)
 	_place(player, Vector3(0, 1, 640))
 	await _frames(10)
 
@@ -84,7 +90,8 @@ func _ready() -> void:
 	await _frames(10)
 	_check(not face.sees_player and not face.is_watched, "cover blocks its stare and your view")
 	# Out on the open avenue down the middle of the plain.
-	_place(player, Vector3(0, 1, 620))
+	# Beyond z 670 the stair crest no longer hides him from the eyes.
+	_place(player, Vector3(0, 1, 730))
 	cam.face_toward(face.centre())
 	await _seconds(1.2)
 	_check(face.sees_player and player.move_speed < 5.0 * 0.6, "open ground: it stares and slows him")

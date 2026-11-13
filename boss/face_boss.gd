@@ -70,6 +70,8 @@ signal eyes_closed
 @export var eyelid_open_deg := -95.0
 ## A camera-facing crimson glow on each eye so they pierce the dither from kilometres away.
 @export var eye_glow := true
+## Camera distance (m) at and beyond which the eye glows are full size; closer, they shrink.
+@export var glow_full_distance := 1500.0
 
 @export_group("Shape")
 ## Placeholder head scale (1 = a 6 m head). 90 makes it a mountain, about 550 m tall.
@@ -239,6 +241,7 @@ func _physics_process(delta: float) -> void:
 		rotation.y = atan2(-d.x, -d.z)
 		global_position.y = _ground_height() + ride_height
 	_update_watched(cam)
+	_fit_glows(cam)
 	_update_sight(player, delta)
 	_track_with_eyes(player, delta)
 	if _caught or not active:
@@ -417,6 +420,18 @@ func _track_with_eyes(player: Player, delta: float) -> void:
 		eye.basis = eye.basis.orthonormalized().slerp(want, clampf(delta * 10.0, 0.0, 1.0))
 
 
+## From far off the glows are twice the eye disc so they read from kilometres away. Up
+## close (on his tie, under the brow) that size would merge them into one red bar, so they
+## shrink toward the disc itself and stay two hard points.
+func _fit_glows(cam: Camera3D) -> void:
+	if _glows.is_empty():
+		return
+	var k := clampf(cam.global_position.distance_to(_eye_centre()) / glow_full_distance, 0.3, 1.0)
+	for g in _glows:
+		if g.has_meta(&"base_pixel_size"):
+			g.pixel_size = float(g.get_meta(&"base_pixel_size")) * k
+
+
 func _eye_centre() -> Vector3:
 	if _eyes.size() >= 2:
 		return (_eyes[0].global_position + _eyes[1].global_position) * 0.5
@@ -490,6 +505,7 @@ func _add_glow(parent: Node3D, at: Vector3) -> Sprite3D:
 	s.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	# Twice the eye disc across, in the model's own units, so the eyes stay two hard points.
 	s.pixel_size = (EYE_DISC_RADIUS * 4.0) / tex.width
+	s.set_meta(&"base_pixel_size", s.pixel_size)
 	s.shaded = false
 	s.double_sided = true
 	s.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED

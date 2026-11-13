@@ -263,6 +263,13 @@ func _build_land() -> void:
 	_tower = Look.build_beacon(layout, TOWER_CENTER)
 	Look.boat_step(layout, Vector3(0, 0, RAMP_START_Z), Vector3(0, TOWER_STEP_Y, TOWER_CENTER.z + 23.5), 3.4)
 	Look.foam_ring(layout, TOWER_CENTER, 31.0, 9)
+	# The landing at the foot of the tower, where the brazier waits and the exit opens.
+	var landing := BoxShape3D.new()
+	landing.size = Vector3(18.0, 1.0, 8.0)
+	var lc := Vector3(0, TOWER_STEP_Y - 0.5, -1101.0)
+	Look.solid(layout, "Landing", landing, Transform3D(Basis.IDENTITY, lc))
+	Look.lb(lb_material, Look.box(landing.size), Look.STONE, lc, layout)
+	Look.lb(lb_material, Look.box(Vector3(18.4, 0.3, 0.3)), Look.INK, lc + Vector3(0, 0.4, 4.05), layout)
 	Look.make_doorway(mountain_exit)
 
 
@@ -373,8 +380,8 @@ func _build_head() -> void:
 		var p1 := _on_cone(a, top)
 		var p2 := _on_cone(a, bottom)
 		var length := p1.distance_to(p2)
-		var width := lerpf(26.0, 70.0, (CONE_HEIGHT - bottom) / CONE_HEIGHT)
-		var s := Look.lb(head_material, Look.box(Vector3(width, 3.0, length)), Look.BONE,
+		var width := lerpf(90.0, 240.0, (CONE_HEIGHT - bottom) / CONE_HEIGHT)
+		var s := Look.lb(head_material, Look.box(Vector3(width, 6.0, length)), Look.BONE,
 			(p1 + p2) * 0.5, cone_root, 0.0, 1.0, 1.0)
 		var dir := (p1 - p2).normalized()
 		var out := Vector3(cos(a), 0, sin(a))

@@ -310,6 +310,7 @@ func _on_room_entered(_spawn: StringName) -> void:
 	lamp.light_energy = 1.2
 	lamp.omni_range = 7.0
 	lamp.position = Vector3.UP * 2.2
+	lamp.visible = not $InkState.is_dawn()   # no lamp needed in daylight
 	p.add_child(lamp)
 	var cam := Game.camera
 	if cam:

@@ -228,12 +228,15 @@ func _set_dawn(t: float) -> void:
 		ra.set("bed", &"bed_dawn" if t > 0.5 else &"bed_hub_night")
 	if hub.sound() and Game.current_room == hub:
 		hub.sound().set_bed(&"bed_dawn" if t > 0.5 else &"bed_hub_night")
+	var lamp: Node3D = Game.player.get_node_or_null(^"HubLamp") if is_instance_valid(Game.player) else null
+	if lamp:
+		lamp.visible = t <= 0.5
 	if t > 0.5:
-		_moon.light_color = Color(1.0, 0.82, 0.62)
-		_moon.light_energy = 1.3
+		_moon.light_color = Color(0.95, 0.86, 0.78)
+		_moon.light_energy = 0.6
 		_moon.basis = Basis.looking_at(-sun, Vector3.UP)
 		_env.fog_light_color = Color(0.85, 0.62, 0.5)
-		_env.ambient_light_color = Color(0.85, 0.72, 0.62)
+		_env.ambient_light_color = Color(0.62, 0.55, 0.52)
 	else:
 		_moon.basis = _moon_basis
 		_moon.light_color = Color(0.62, 0.7, 1.0)

@@ -7,9 +7,9 @@ extends CharacterBody3D
 ## Fired when the player starts or stops walking (handy for sprite animation).
 signal walking_changed(is_walking: bool)
 
-@export var move_speed := 5.0
+@export var move_speed := 3.5
 ## Speed while holding `run`. Rooms are hundreds of meters across.
-@export var run_speed := 10.0
+@export var run_speed := 9.0
 @export var acceleration := 30.0
 @export var friction := 40.0
 @export var gravity := 20.0
@@ -19,6 +19,15 @@ signal walking_changed(is_walking: bool)
 @export var controls_enabled := true
 ## Multiplier on the input vector. A room can set it to Vector2(-1, -1) to invert controls.
 @export var input_scale := Vector2.ONE
+
+@export_group("Animation")
+## Ground speed (m/s) at which the walk clip plays at 1x. Tune to stop foot sliding.
+@export var walk_anim_speed := 1.75
+## Ground speed (m/s) at which the run clip plays at 1x.
+@export var run_anim_speed := 4.5
+## Set true to drive model.play() yourself (cutscenes, climbing, being caught).
+@export var animation_locked := false
+@export_group("")
 
 ## Seconds the shadow trails the body. Follows Game.shadow_lag() unless a room overrides it.
 @export var shadow_lag := 0.5
@@ -30,6 +39,9 @@ var facing := Vector3.FORWARD
 var is_walking := false
 
 @onready var visual: Node3D = $Visual
+## The rigged little man. model.play(&"caught"), model.set_tint(color), etc.
+@onready var model: LittleManModel = $Visual/Model
+@onready var _shadow_model: LittleManModel = $ShadowCaster/Model
 ## Where a carried ink's object hangs. Its child is replaced when Game.carried changes.
 @onready var carry_slot: Node3D = $Visual/CarrySlot
 ## A shadows-only copy of the body that replays where the body was `shadow_lag` seconds ago.
@@ -41,6 +53,8 @@ var _history: Array = []  # [time, Transform3D of body, visual yaw]
 func _ready() -> void:
 	add_to_group(&"player")
 	shadow_caster.top_level = true
+	model.set_cast_shadow(GeometryInstance3D.SHADOW_CASTING_SETTING_OFF)
+	_shadow_model.set_cast_shadow(GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY)
 	if shadow_lag_from_story:
 		shadow_lag = Game.shadow_lag()
 	Game.carried_changed.connect(_refresh_carry)
@@ -77,9 +91,21 @@ func _physics_process(delta: float) -> void:
 		var target_yaw := atan2(-dir.x, -dir.z)
 		visual.rotation.y = lerp_angle(visual.rotation.y, target_yaw, clampf(turn_speed * delta, 0.0, 1.0))
 	var walking := horizontal.length() > 0.1
+	if not animation_locked:
+		_animate(horizontal.length())
 	if walking != is_walking:
 		is_walking = walking
 		walking_changed.emit(walking)
+
+
+func _animate(ground_speed: float) -> void:
+	var carrying := Game.carried != &""
+	if ground_speed < 0.1:
+		model.play(&"carry_idle" if carrying else &"idle")
+	elif ground_speed > (move_speed + run_speed) * 0.5 and not carrying:
+		model.play(&"run", -1.0, clampf(ground_speed / run_anim_speed, 0.5, 3.0))
+	else:
+		model.play(&"carry_walk" if carrying else &"walk", -1.0, clampf(ground_speed / walk_anim_speed, 0.5, 3.0))
 
 
 ## What the little man is holding (&"" = nothing). Same as Game.carried.
@@ -115,13 +141,15 @@ func _refresh_carry(ink: StringName) -> void:
 
 func _update_shadow() -> void:
 	var now := Time.get_ticks_msec() / 1000.0
-	_history.append([now, global_transform, visual.rotation.y])
+	_history.append([now, global_transform, visual.rotation.y, model.current, model.anim.speed_scale])
 	var cutoff := now - shadow_lag
 	while _history.size() > 1 and _history[1][0] <= cutoff:
 		_history.pop_front()
 	var past: Array = _history[0]
 	var xf: Transform3D = past[1]
 	shadow_caster.global_transform = xf.rotated_local(Vector3.UP, past[2])
+	if past[3] != &"":
+		_shadow_model.play(past[3], -1.0, past[4])
 
 
 ## Turn instantly to face a world direction (flattened onto the ground).

@@ -1,4 +1,4 @@
-[gd_scene load_steps=25 format=3]
+[gd_scene load_steps=27 format=3]
 
 [ext_resource type="Script" path="res://rooms/checkerboard/checkerboard.gd" id="1"]
 [ext_resource type="Script" path="res://core/room_spawn.gd" id="2"]
@@ -8,6 +8,8 @@
 [ext_resource type="Script" path="res://audio/room_audio.gd" id="6"]
 [ext_resource type="Script" path="res://core/vista_zone.gd" id="7"]
 [ext_resource type="PackedScene" path="res://props/watching_set.tscn" id="8"]
+[ext_resource type="PackedScene" path="res://rooms/checkerboard/models/stone_littleman_a.glb" id="10"]
+[ext_resource type="PackedScene" path="res://rooms/checkerboard/models/stone_littleman_c.glb" id="11"]
 
 [sub_resource type="Environment" id="env"]
 background_mode = 2
@@ -103,6 +105,26 @@ script = ExtResource("4")
 
 [node name="CraterHeart" type="Marker3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -6, 0)
+
+[node name="Statues" type="Node3D" parent="."]
+
+[node name="CaughtWalking1" parent="Statues" instance=ExtResource("10")]
+transform = Transform3D(-0.93969, 0, -0.34202, 0, 1, 0, 0.34202, 0, -0.93969, -3, 0, 159)
+
+[node name="CaughtWalking2" parent="Statues" instance=ExtResource("10")]
+transform = Transform3D(-0.81915, 0, 0.57358, 0, 1, 0, -0.57358, 0, -0.81915, 9, 0, 135)
+
+[node name="CaughtWalking3" parent="Statues" instance=ExtResource("10")]
+transform = Transform3D(-0.64279, 0, -0.76604, 0, 1, 0, 0.76604, 0, -0.64279, -9, 0, 105)
+
+[node name="CaughtWalking4" parent="Statues" instance=ExtResource("10")]
+transform = Transform3D(-0.98481, 0, 0.17365, 0, 1, 0, -0.17365, 0, -0.98481, 3, 0, 81)
+
+[node name="CaughtLookingUp1" parent="Statues" instance=ExtResource("11")]
+transform = Transform3D(-0.70711, 0, 0.70711, 0, 1, 0, -0.70711, 0, -0.70711, 14, 0, -14)
+
+[node name="CaughtLookingUp2" parent="Statues" instance=ExtResource("11")]
+transform = Transform3D(-0.49026, 0, -0.87158, 0, 1, 0, 0.87158, 0, -0.49026, -16, 0, -9)
 
 [node name="Herds" type="Node3D" parent="."]
 

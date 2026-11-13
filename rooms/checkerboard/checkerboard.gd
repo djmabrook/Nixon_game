@@ -97,6 +97,7 @@ const VOICE_MIN_RADIUS := 2.5
 
 func _ready() -> void:
 	_trail.resize(8)
+	_setup_statues()
 	_spawn_herds()
 	_balls.append(key_ball)
 	for b in _balls:
@@ -178,8 +179,28 @@ func _spawn_herds() -> void:
 			_balls.append(b)
 
 
+## The stone men the stare caught before him. They sit on the ground (or the crater
+## slope), never move with the tide, and stop rolling spheres, so they are shelter too.
+func _setup_statues() -> void:
+	for s in $Statues.get_children():
+		var n := s as Node3D
+		n.global_position.y = board.height_at(n.global_position)
+		var body := StaticBody3D.new()
+		var cs := CollisionShape3D.new()
+		var shape := CylinderShape3D.new()
+		shape.radius = 0.55
+		shape.height = 2.05
+		cs.shape = shape
+		cs.position.y = 1.025
+		body.add_child(cs)
+		n.add_child(body)
+
+
 func _clear_spot(pos: Vector3, r: float, placed: Array[Vector4], spawn_pos: Vector3) -> bool:
 	var flat := Vector2(pos.x, pos.z)
+	for s in $Statues.get_children():
+		if flat.distance_to(Vector2(s.global_position.x, s.global_position.z)) < r + 6.0:
+			return false
 	if flat.length() < board.crater_radius + r + 4.0:
 		return false
 	if flat.distance_to(Vector2(spawn_pos.x, spawn_pos.z)) < r + 14.0:

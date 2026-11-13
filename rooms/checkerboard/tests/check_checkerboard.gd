@@ -26,6 +26,11 @@ func _ready() -> void:
 	_check(biggest >= 24.0, "a cathedral sphere exists (r = %.1f m)" % biggest)
 	_check(room.focus_target == room.moon and Game.camera.far >= 1000.0, "camera focus is the moon")
 	_check(not room.board.is_black_at(p.global_position), "spawn is on a pink tile")
+	var on_black := 0
+	for st in room.get_node("Statues").get_children():
+		if st.name.begins_with("CaughtWalking") and room.board.is_black_at(st.global_position):
+			on_black += 1
+	_check(on_black == 4, "the walking stone men all stand on black tiles")
 	_check(Sound.bed_id() == &"bed_checker" and Sound.surface == &"tile", "checker bed and tile footsteps")
 	await _frames(30)
 	_check(room._voice_balls.count(null) < room.VOICE_COUNT, "rolling voices follow the nearest big spheres")

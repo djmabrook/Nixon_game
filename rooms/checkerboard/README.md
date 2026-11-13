@@ -28,6 +28,11 @@ moon, the Watcher's eye, hangs low and circles it, and "down" always points at t
 | `checker_sphere.gdshader`, `dream_sky.gdshader` | Sphere checker; the sky with the storm band and the moon eye |
 | `tests/check_checkerboard.tscn` | Headless check of this room |
 
+**Stone men** (`models/stone_littleman_a|c.glb`, from the art thread) are the men the stare caught
+before him. Four mid-stride ones stand on black tiles along the route in, caught where the tide was
+dragging them, and none stand on pink. Two looking up stand in the crater near the socket, facing
+outward to where the eye passes. They never move and they stop rolling spheres, so they are shelter.
+
 **Sound** uses the shared `Sound` system (see `audio/AUDIO.md`). `RoomAudio` sets `bed_checker` (its
 tide breathes every 16 s) and hollow `tile` footsteps. The twelve nearest big spheres each get a
 `GiantVoice` (`sphere_roll_loop`, sized by diameter, louder with speed). Landings are `giant_settle`

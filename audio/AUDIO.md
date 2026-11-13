@@ -21,7 +21,10 @@ Two more that follow from the story:
 - **The stare drains colour, in sound too.** Being looked at narrows the whole mix to a thin
   telephone band (about 320 to 650 Hz) while the broadcast stays whole. Safety is full range;
   danger is one-bit.
-- **Inks are the only music.** Each ink is one note. Ember, salmon and crimson stack in fifths
+- **The soundtrack is Alberto's** (`res://music/`, `Sound.play_music`). Everything else stays
+  unscored: the surf itself (air, sand hiss, pops, landings) is synthesised live in
+  `surf/surf_audio.gd` from the physics.
+- **Inks are the only composed notes.** Each ink is one note. Ember, salmon and crimson stack in fifths
   (D, A, E). Ultraviolet is the raised fourth (G#), the strange bright note of D lydian that only
   sounds right once the other three are home. Mending plays them; nothing else is scored.
 
@@ -37,7 +40,8 @@ Two more that follow from the story:
 | Bed | World | each region's air | ducks under the Far bus (sidechain) |
 | Near | World | the little man, his hands, small props, fire | small reverb, set per room |
 | Far | World | giant things | air low-pass, vast reverb, set per room |
-| Ink | World | ink notes, mends | hall reverb |
+| Ink | World | ink notes, mends, surf gate chimes | hall reverb |
+| Music | World | Alberto's soundtrack from `res://music/` (see `music/README.md`) | low-pass that opens with the rider's flow |
 
 Ids pick their bus by prefix (`bed_` Bed, `broadcast_ tv_ static_ stare_` Broadcast,
 `giant_ sphere_ eyelids_` Far, `ink_ mend` Ink, everything else Near). Don't make new buses

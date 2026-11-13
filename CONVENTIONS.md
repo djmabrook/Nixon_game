@@ -25,6 +25,8 @@ dither look over everything. Keep it original: our own places, shapes and palett
 | `shaders/` | Dither / pixel post-process and shared shaders | shader thread |
 | `art/` | Shared sprites, textures, palettes | sprites thread |
 | `audio/` | The `Sound` autoload, shared sound library, buses. Read `audio/AUDIO.md` | sound thread |
+| `surf/` | Surfing: terrain swells, the Surfer (physics, ragdoll, camera, board, trail, sound). Read `surf/README.md` | surf thread |
+| `music/` | Alberto's soundtrack. Drop `surf.ogg` or `<room_id>.ogg` here and it plays | Alberto |
 | `tools/` | Dev scripts and the smoke test | anyone |
 
 **Stay in your folder.** If you need something changed in `core/`, `player/`, `camera/`, `main.tscn`
@@ -117,6 +119,12 @@ saved to `user://save.json` on every change.
   It closes by itself when its room calls `complete()` (`close_on_room_complete`). In the hub, tick
   `droop_with_inks` and it droops a third per ink and closes at three. Art can replace the meshes but
   keep the node names `Screen/LeftEye|RightEye/{White,Pupil,Lid}`.
+
+## Surfing (the core of play since 2026-11-13)
+
+He rides a board over undulating ground wherever the room has a `SurfTerrain`; rooms without one
+still walk. Every region is being reshaped to surf. How it works, how to make a region surfable,
+and how to bend its rules: `surf/README.md`.
 
 ## The little man
 

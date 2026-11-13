@@ -1,4 +1,4 @@
-[gd_resource type="AudioBusLayout" load_steps=10 format=3]
+[gd_resource type="AudioBusLayout" load_steps=11 format=3]
 
 ; The game's mixer. See audio/AUDIO.md before changing it.
 ;
@@ -7,7 +7,8 @@
 ;   World <- Bed        each region's air. Ducks when giants sound.
 ;   World <- Near       the little man and what he touches. Small room reverb.
 ;   World <- Far        giant things: low-passed, vast reverb. Arrives late (see Sound.play_at).
-;   World <- Ink        the only music: ink notes and mends. Hall reverb.
+;   World <- Ink        ink notes and mends. Hall reverb.
+;   World <- Music      Alberto's soundtrack (res://music/). Its low-pass opens with the rider's flow.
 
 [sub_resource type="AudioEffectHardLimiter" id="master_limit"]
 ceiling_db = -0.8
@@ -63,6 +64,10 @@ spread = 1.0
 hipass = 0.2
 dry = 1.0
 wet = 0.22
+
+[sub_resource type="AudioEffectLowPassFilter" id="music_flow"]
+cutoff_hz = 20000.0
+resonance = 0.7
 
 [resource]
 bus/0/name = &"Master"
@@ -125,3 +130,11 @@ bus/6/volume_db = 0.0
 bus/6/send = &"World"
 bus/6/effect/0/effect = SubResource("ink_hall")
 bus/6/effect/0/enabled = true
+bus/7/name = &"Music"
+bus/7/solo = false
+bus/7/mute = false
+bus/7/bypass_fx = false
+bus/7/volume_db = 0.0
+bus/7/send = &"World"
+bus/7/effect/0/effect = SubResource("music_flow")
+bus/7/effect/0/enabled = true

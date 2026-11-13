@@ -55,8 +55,7 @@ extends Room
 @export var ridge_fov := 48.0
 @export var slide_fov := 72.0
 
-const STAKE_SCENE := preload("res://hub/props/ember_stake.tscn")
-const BEACON_SCALE := 30.0
+const DOOR_SCENE := preload("res://hub/props/region_door.tscn")
 const RIDDEN_META := &"hub_ridden_grooves"
 const InkState := preload("res://hub/hub_story.gd")
 
@@ -273,12 +272,17 @@ func arm_point(i: int, r: float) -> Vector3:
 
 func _add_arm(i: int) -> void:
 	var id := _ids[i]
-	# A towering ember beacon at the outer end of the groove, in the room's color.
-	var stake: Node3D = STAKE_SCENE.instantiate()
-	stake.name = "Beacon_%s" % id
+	# A sunken bone door at the outer end of the groove, lit in the room's colour once ember
+	# is home. The groove that opens with the eye ends at the usher's open hand instead.
+	var stake: Node3D = DOOR_SCENE.instantiate()
+	stake.name = "Door_%s" % id
+	stake.set("hand", opens_with_eye(id))
 	add_child(stake)
-	stake.position = arm_point(i, arm_outer_radius + 3.0)
-	stake.scale = Vector3.ONE * BEACON_SCALE
+	var a := arm_angle(i, arm_outer_radius)
+	var out := Vector3(cos(a), 0.0, sin(a))
+	var at: Vector3 = _sand.ground_point(Vector2(out.x, out.z) * (arm_outer_radius + 26.0))
+	stake.position = at
+	stake.basis = Basis.looking_at(out, Vector3.UP)   # doorway (+Z) faces the crater
 	stake.set("light_range", 140.0)
 	stake.set("color", room_color(id))
 	stake.set("lit", false)   # hub_story.gd lights them when ember comes home

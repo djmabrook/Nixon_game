@@ -54,6 +54,11 @@ uniform float eye_ring_width = 3.0;
 // The eye's lid: 0 open, 1 shut (the blink).
 uniform float lid = 0.0;
 
+// Hand-drawn ridge detail (art/tex/sand_ridges_tile.png), tiled in world space near the eye.
+uniform sampler2D ridge_tile : filter_nearest, repeat_enable;
+uniform float ridge_tile_size = 7.0;
+uniform float ridge_tile_amount = 0.55;
+
 varying vec3 world_pos;
 
 void vertex() {
@@ -88,6 +93,14 @@ void fragment() {
 	vec3 light_col = mix(s_light, v_light, vortex_t);
 	vec3 dark_col = mix(s_dark, v_dark, vortex_t);
 	vec3 col = mix(dark_col, light_col, ridge);
+
+	// The drawn ridge tile, faded out where it would shimmer (finer than ~a pixel per texel).
+	vec2 tuv = p / ridge_tile_size;
+	float tile_w = length(fwidth(tuv)) * 128.0;
+	vec3 tile_c = texture(ridge_tile, tuv).rgb;
+	float tile_l = dot(tile_c, vec3(0.3, 0.59, 0.11));
+	float tile_k = ridge_tile_amount * (1.0 - smoothstep(0.6, 1.6, tile_w)) * (1.0 - vortex_t * 0.6);
+	col *= mix(1.0, 0.55 + 0.9 * tile_l, tile_k);
 
 	// Grain so flat areas are never flat once the dither pass quantises them.
 	col *= 0.92 + 0.16 * hash(floor(p * 2.0));

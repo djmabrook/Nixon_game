@@ -1,14 +1,18 @@
 @tool
 extends Node3D
-## Far-off things you see from the ridge, as switchable layers. Placeholder geometry,
-## built in code; each layer is a child Node3D you can swap for a real model.
-## They ignore fog (so they stay as silhouettes) and are tinted toward the haze instead.
+## Far-off things you see from the ridge, as switchable layers. Each is a painted cut-out
+## (art/tex/horizon_*.png) standing 2 to 3.5 km out, square-on to the crater, outside the
+## fog. The story decides when each layer shows; flip the exports or call set_layer.
 ##
-## - Watcher: a mountain on the horizon with two faint red lights near its peak.
-## - Beacon: a lit tower far out at sea.
-## - PinkStorm: a bank of pink storm cloud.
+## - Watcher: a dark head peeking over the horizon with two red eyes, under the stone-faced
+##   range. The eyes go dark at dawn (watcher_eyes).
+## - Beacon: the cone mountain far out at sea. Dark until ember is home, then its fire is lit.
+## - PinkStorm: a breaking wave of pink cloud.
 ## - BlackDisc: a black disc hanging in the sky (there from the start; gone once crimson is home).
-## The story decides when each appears; flip the exports (or call set_layer) to show them.
+## Always there: the checker sphere rising, the glyph skyline, the colossi palms, the statues.
+
+const TEX := "res://hub/art/tex/%s.png"
+const SHADER := preload("res://hub/horizon.gdshader")
 
 @export var watcher := true:
 	set(v):
@@ -31,8 +35,17 @@ extends Node3D
 	set(v):
 		watcher_eyes = v
 		_sync()
+## 0 drained (bone and black) to 1 full colour. The story drives it.
+@export_range(0.0, 1.0) var color_amount := 1.0:
+	set(v):
+		color_amount = v
+		for m in _mats:
+			m.set_shader_parameter("color_amount", v)
 ## Color the far silhouettes lean toward, standing in for atmospheric haze.
 @export var haze := Color(0.32, 0.07, 0.06)
+
+var _mats: Array[ShaderMaterial] = []
+var _watcher_mat: ShaderMaterial
 
 
 func _ready() -> void:
@@ -40,7 +53,7 @@ func _ready() -> void:
 	_sync()
 
 
-## Where the Watcher's mountain stands (local), so the hub can aim the fourth groove at it.
+## Where the Watcher stands (local), so the hub can aim the fourth groove at it.
 func watcher_position() -> Vector3:
 	return _polar(3200.0, 225.0)
 
@@ -50,37 +63,23 @@ func set_layer(layer: StringName, on: bool) -> void:
 
 
 func _process(_delta: float) -> void:
-	if Engine.is_editor_hint() or not has_node("Watcher"):
+	if Engine.is_editor_hint() or _watcher_mat == null or not watcher_eyes:
 		return
-	# The Watcher's lights breathe very slowly.
+	# The Watcher's eyes breathe very slowly.
 	var t := Time.get_ticks_msec() / 1000.0
-	var e := 3.0 + 1.5 * sin(t * 0.4)
-	for eye in $Watcher.get_children():
-		if eye is MeshInstance3D and eye.name.begins_with("Eye"):
-			(eye.material_override as StandardMaterial3D).emission_energy_multiplier = e
+	_watcher_mat.set_shader_parameter("glow", 1.6 + 0.6 * sin(t * 0.4))
 
 
 func _sync() -> void:
 	if not is_node_ready():
 		return
-	for pair in [["Watcher", watcher], ["Beacon", beacon], ["PinkStorm", pink_storm], ["BlackDisc", black_disc]]:
+	for pair in [["Watcher", watcher], ["Beacon", beacon], ["BeaconDark", not beacon],
+			["PinkStorm", pink_storm], ["BlackDisc", black_disc]]:
 		if has_node(pair[0]):
 			get_node(pair[0]).visible = pair[1]
-	if has_node("Watcher"):
-		for eye in $Watcher.get_children():
-			if eye.name.begins_with("Eye"):
-				eye.visible = watcher_eyes
-
-
-func _mat(c: Color, emit := false) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	m.disable_fog = true
-	m.albedo_color = c
-	if emit:
-		m.emission_enabled = true
-		m.emission = c
-	return m
+	if _watcher_mat:
+		_watcher_mat.set_shader_parameter("eyes_dim", 0.0 if watcher_eyes else 1.0)
+		_watcher_mat.set_shader_parameter("glow", 1.6 if watcher_eyes else 1.0)
 
 
 func _polar(dist: float, deg: float, y := 0.0) -> Vector3:
@@ -88,85 +87,76 @@ func _polar(dist: float, deg: float, y := 0.0) -> Vector3:
 	return Vector3(cos(a) * dist, y, sin(a) * dist)
 
 
+## A painted cut-out `width` metres wide (height from the texture's aspect), its bottom
+## edge `sink` metres below sea level, standing at dist/deg and facing the crater.
+func _cutout(parent: Node3D, tex_name: String, dist: float, deg: float, width: float, sink := 20.0, lift := 0.0) -> MeshInstance3D:
+	var tex: Texture2D = load(TEX % tex_name)
+	var h := width * float(tex.get_height()) / float(tex.get_width())
+	var q := QuadMesh.new()
+	q.size = Vector2(width, h)
+	var m := ShaderMaterial.new()
+	m.shader = SHADER
+	m.set_shader_parameter("tex", tex)
+	m.set_shader_parameter("haze", Color(haze.r, haze.g, haze.b))
+	m.set_shader_parameter("color_amount", color_amount)
+	_mats.append(m)
+	var mi := MeshInstance3D.new()
+	mi.name = tex_name.to_pascal_case()
+	mi.mesh = q
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+	var at := _polar(dist, deg, h * 0.5 - sink + lift) - parent.position
+	mi.position = at
+	# Square-on to the crater's centre (QuadMesh faces +Z).
+	var out := Vector3(cos(deg_to_rad(deg)), 0.0, sin(deg_to_rad(deg)))
+	mi.basis = Basis.looking_at(out, Vector3.UP)
+	return mi
+
+
+func _group(n: String) -> Node3D:
+	var g := Node3D.new()
+	g.name = n
+	add_child(g)
+	return g
+
+
 func _build() -> void:
 	for c in get_children():
 		remove_child(c)
 		c.free()
+	_mats.clear()
 
-	# The Watcher: a broad dark mountain straight across the crater from the shore you arrive on.
-	var w := Node3D.new()
-	w.name = "Watcher"
-	add_child(w)
-	w.position = watcher_position()
-	var peak := MeshInstance3D.new()
-	var cone := CylinderMesh.new()
-	cone.top_radius = 40.0
-	cone.bottom_radius = 900.0
-	cone.height = 650.0
-	cone.radial_segments = 9
-	cone.rings = 1
-	peak.mesh = cone
-	peak.material_override = _mat(Color(0.05, 0.015, 0.02).lerp(haze, 0.25))
-	w.add_child(peak)
-	peak.position.y = 300.0
-	for side in [-1.0, 1.0]:
-		var eye := MeshInstance3D.new()
-		eye.name = "Eye%d" % int(side)
-		var sm := SphereMesh.new()
-		sm.radius = 9.0
-		sm.height = 18.0
-		eye.mesh = sm
-		eye.material_override = _mat(Color(1.0, 0.08, 0.04), true)
-		w.add_child(eye)
-		# Facing the crater: offset sideways along the mountain's face.
-		var to_center := -w.position.normalized()
-		var side_dir := to_center.cross(Vector3.UP).normalized()
-		eye.position = Vector3(0, 520.0, 0) + to_center * 120.0 + side_dir * side * 45.0
+	# The Watcher: straight across the crater from the shore you arrive on.
+	var w := _group("Watcher")
+	# The head is drawn small at the bottom of a wide strip; this size puts it about 1.8 km
+	# across, so from the rim it peeks over the far side of the crater.
+	var head := _cutout(w, "horizon_watcher_far", 3400.0, 225.0, 13000.0, 0.0, 320.0)
+	_watcher_mat = head.material_override
+	_watcher_mat.set_shader_parameter("keep_red", 1.0)
+	_cutout(w, "horizon_watcher_range", 3500.0, 196.0, 4200.0, 30.0)
 
-	# The Beacon: a tall thin tower with a lit crown, far out at sea.
-	var b := Node3D.new()
-	b.name = "Beacon"
-	add_child(b)
-	b.position = _polar(2400.0, 130.0)
-	var tower := MeshInstance3D.new()
-	var tm := BoxMesh.new()
-	tm.size = Vector3(20, 420, 20)
-	tower.mesh = tm
-	tower.material_override = _mat(Color(0.06, 0.02, 0.02).lerp(haze, 0.3))
-	b.add_child(tower)
-	tower.position.y = 210.0
-	var crown := MeshInstance3D.new()
-	var cm := SphereMesh.new()
-	cm.radius = 22.0
-	cm.height = 44.0
-	crown.mesh = cm
-	crown.material_override = _mat(Color(1.0, 0.45, 0.12), true)
-	b.add_child(crown)
-	crown.position.y = 440.0
+	# The beacon: the cone mountain at sea, dark until ember comes home.
+	var bd := _group("BeaconDark")
+	_cutout(bd, "horizon_cone_mountain", 2400.0, 130.0, 1500.0, 40.0)
+	var b := _group("Beacon")
+	var lit := _cutout(b, "horizon_cone_lit", 2400.0, 130.0, 1500.0, 40.0)
+	lit.material_override.set_shader_parameter("glow", 2.5)
 
-	# The pink storm: stacked, flattened cloud masses low over the sea.
-	var s := Node3D.new()
-	s.name = "PinkStorm"
-	add_child(s)
-	s.position = _polar(2800.0, 300.0)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 7
-	for i in 14:
-		var puff := MeshInstance3D.new()
-		var pm := SphereMesh.new()
-		var rad := rng.randf_range(160.0, 340.0)
-		pm.radius = rad
-		pm.height = rad * 0.9
-		puff.mesh = pm
-		puff.material_override = _mat(Color(0.95, 0.45, 0.65).lerp(haze, rng.randf_range(0.15, 0.45)))
-		s.add_child(puff)
-		puff.position = Vector3(rng.randf_range(-900, 900), rng.randf_range(120, 520), rng.randf_range(-300, 300))
-		puff.scale = Vector3(1.6, 0.55, 1.0)
+	# The pink storm: a breaking wave of cloud low over the sea.
+	var s := _group("PinkStorm")
+	_cutout(s, "cloud_front_wave", 2900.0, 300.0, 5200.0, 0.0, 120.0)
 
-	# The black disc: a flat black circle hanging in the sky, edge-on to nothing.
-	var d := Node3D.new()
-	d.name = "BlackDisc"
-	add_child(d)
+	# Always on the horizon.
+	var far := _group("Far")
+	_cutout(far, "horizon_sphere_rise", 3000.0, 62.0, 1800.0, 60.0)
+	_cutout(far, "horizon_glyph_skyline", 3300.0, 345.0, 4600.0, 30.0)
+	_cutout(far, "horizon_palm_colossi", 2600.0, 165.0, 5000.0, 140.0)
+	_cutout(far, "horizon_palm_colossi", 2700.0, 268.0, 4400.0, 130.0)
+	_cutout(far, "far_statues", 1700.0, 95.0, 900.0, 40.0)
+
+	# The black disc: a flat black circle hanging in the sky.
+	var d := _group("BlackDisc")
 	d.position = _polar(2600.0, 20.0, 700.0)
 	var disc := MeshInstance3D.new()
 	var dm := CylinderMesh.new()
@@ -175,6 +165,10 @@ func _build() -> void:
 	dm.height = 4.0
 	dm.radial_segments = 48
 	disc.mesh = dm
-	disc.material_override = _mat(Color(0.0, 0.0, 0.0))
+	var dmat := StandardMaterial3D.new()
+	dmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	dmat.disable_fog = true
+	dmat.albedo_color = Color.BLACK
+	disc.material_override = dmat
 	d.add_child(disc)
 	disc.rotation = Vector3(deg_to_rad(80.0), deg_to_rad(20.0), 0.0)

@@ -5,8 +5,9 @@ You arrive on the shore facing a 120 m dune ridge with a column of embers rising
 Top the ridge and the camera pulls far back over the crater, a slate-grey whirlpool sinking
 180 m to a stadium-sized glowing pit.
 
-Every room under `rooms/` gets its own glowing groove that starts at a towering ember beacon
-on the beach, climbs the dune and spirals down to its own slice of the pit's rim. Walking with
+Every room under `rooms/` gets its own glowing groove that starts at its region's door
+on the beach (a 70 m bone monolith, half sunk and leaning, lit in the room's ink once ember is home),
+climbs the dune and spirals down to its own slice of the pit's rim. Walking with
 a groove, the sand carries you. The first walk down takes about a minute; after that the groove
 is a slide. Step into the pit and the sand swallows the little man into that room. When he
 comes back he's set down a little way up the same groove. Add a room folder and a new groove
@@ -17,12 +18,15 @@ appears. Bring a room's ink home and its groove runs full (see Story below).
 | `hub.tscn` / `hub.gd` | The scene and the arm layout, return spawns, pull, slides, camera framing, sinking |
 | `sand_vortex.gd` | Builds the beach, dune ridge, crater and pit mesh, its collision and the shore wall |
 | `sand.gdshader` | Flowing spiral ridges, the room grooves, the pit and its hot rim |
-| `sea.gdshader`, `night_sky.gdshader` | The night sea and the starry sky with the red horizon |
+| `sea.gdshader`, `night_sky.gdshader` | The night sea, and the sky with the painted night, pink storm and dawn strips and the pale sun |
 | `vortex.gd` | The pit: one `RoomExit` that picks the room by which slice you enter |
 | `hub_story.gd` | The story state (`InkState` node): drained start, plantings, the eye, the mountain groove, dawn |
-| `landmarks.gd` | Far horizon layers you can switch on: Watcher mountain (on), beacon, pink storm, black disc |
-| `footprints.gd` | His fading trail in the sand, so you can always find him |
-| `props/` | Placeholder palm and ember beacon (swap for real models, keep the exports) |
+| `landmarks.gd`, `horizon.gdshader` | Painted cut-outs 2 to 3.5 km out: the Watcher (eyes go dark at dawn), the cone beacon (lit by ember), the pink storm, the black disc, and the always-there sphere, glyph skyline, colossi and statues |
+| `hub_art.gd` (`Art` node) | The strata arch on the beach, colossal palms on sea mesas, palm islets |
+| `art_palette.gd` | Drains imported models to bone and black and brings their colour back with the inks |
+| `art/` | The approved models (`.glb`, metre scale) and painted textures |
+| `footprints.gd`, `footprint.gdshader` | His trail, drawn prints that lose their dither dots as they fade |
+| `props/` | `region_door` (door or, for the mountain groove, the usher's hand plaza), the procedural shore palm, the old ember stake |
 | `tests/hub_test.tscn` | Headless check: every groove leads to its room and back |
 | `tests/shots.tscn` | Dev only: saves screenshots along groove 0 (`-- --out=<dir>`) |
 

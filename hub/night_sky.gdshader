@@ -17,6 +17,24 @@ uniform vec3 sun_dir = vec3(-0.7, 0.08, -0.7);
 uniform vec3 dawn_zenith : source_color = vec3(0.25, 0.38, 0.62);
 uniform vec3 dawn_horizon : source_color = vec3(1.0, 0.72, 0.45);
 
+// Painted strips (art/tex): the night horizon, the dawn horizon, and the pale sun.
+// Each strip wraps once around the horizon; its bottom row sits on the horizon line
+// and its top row at strip_height (EYEDIR.y).
+uniform sampler2D night_strip : source_color, filter_nearest, repeat_enable;
+uniform sampler2D dawn_strip : source_color, filter_nearest, repeat_enable;
+// Salmon home: the pink storm rolls in over the horizon strip.
+uniform sampler2D storm_strip : source_color, filter_nearest, repeat_enable;
+uniform float storm_amount = 0.0;
+// Where the storm stands (radians, same as the landmark's angle) and how wide it spreads.
+uniform float storm_angle = 5.236;
+uniform float storm_spread = 1.1;
+// How many times each strip repeats around the horizon.
+uniform float strip_repeat = 2.0;
+uniform sampler2D sun_tex : source_color, filter_nearest;
+uniform float strip_height = 0.42;
+uniform float strip_amount = 1.0;
+uniform float sun_size = 0.09;
+
 float hash(vec3 p) {
 	return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
 }
@@ -30,10 +48,35 @@ void sky() {
 	if (y < 0.0) {
 		col = mix(h * 0.4, below, smoothstep(0.0, 0.08, -y));
 	}
+	// The painted night strip. Drained it is only its light and dark, in bone haze.
+	float az = atan(EYEDIR.z, EYEDIR.x);
+	vec2 suv = vec2((az / TAU + 0.5) * strip_repeat, 1.0 - clamp(y / strip_height, 0.0, 1.0));
+	float strip_mask = step(0.0, y) * (1.0 - smoothstep(strip_height * 0.75, strip_height, y)) * strip_amount;
+	vec3 nt = textureLod(night_strip, suv, 0.0).rgb;
+	float nl = dot(nt, vec3(0.3, 0.59, 0.11));
+	vec3 nt_drained = mix(zenith, drained_horizon, clamp(nl * 1.8, 0.0, 1.0));
+	vec3 night_col = mix(nt_drained, nt, horizon_amount);
+	vec3 storm_col = textureLod(storm_strip, suv, 0.0).rgb;
+	float storm_d = abs(mod(az - storm_angle + PI, TAU) - PI);
+	float storm_k = storm_amount * (1.0 - smoothstep(storm_spread * 0.6, storm_spread, storm_d));
+	night_col = mix(night_col, storm_col, storm_k * step(0.12, dot(storm_col, vec3(0.3, 0.59, 0.11))));
+	col = mix(col, night_col, strip_mask);
+
 	vec3 day = mix(dawn_horizon, dawn_zenith, smoothstep(0.0, 0.5, y));
+	// The dawn strip's top rows are still night, so it fades out well before them.
+	float dawn_mask = step(0.0, y) * (1.0 - smoothstep(strip_height * 0.2, strip_height * 0.6, y)) * strip_amount;
+	day = mix(day, textureLod(dawn_strip, suv, 0.0).rgb, dawn_mask);
 	vec3 sd = normalize(sun_dir);
 	float sun_dot = max(dot(EYEDIR, sd), 0.0);
-	day += vec3(1.0, 0.8, 0.5) * pow(sun_dot, 12.0) * 0.6 + vec3(1.0, 0.95, 0.8) * smoothstep(0.9993, 0.9996, sun_dot) * 3.0;
+	day += vec3(1.0, 0.8, 0.5) * pow(sun_dot, 12.0) * 0.6;
+	// The pale sun sprite, flat-on to the eye.
+	vec3 s_right = normalize(cross(vec3(0.0, 1.0, 0.0), sd));
+	vec3 s_up = cross(sd, s_right);
+	vec2 sp = vec2(dot(EYEDIR, s_right), -dot(EYEDIR, s_up)) / sun_size + 0.5;
+	if (sun_dot > 0.0 && sp.x > 0.0 && sp.x < 1.0 && sp.y > 0.0 && sp.y < 1.0) {
+		vec4 st = textureLod(sun_tex, sp, 0.0);
+		day = mix(day, st.rgb * 1.6, st.a);
+	}
 	col = mix(col, day, dawn);
 	vec3 cell = floor(EYEDIR * 380.0);
 	float s = hash(cell);

@@ -36,6 +36,24 @@ func _ready() -> void:
 	await _wait(1.5)
 	await _shot(state + "_beach")
 	await _at(hub, 495.0, state + "_rim")
+	# The door at the end of groove 0, from in front of it.
+	var door: Vector3 = hub.stakes()[0].global_position
+	var dir := Vector3(door.x, 0, door.z).normalized()
+	Game.camera.play_shot(door - dir * 120.0 + Vector3(0, 14, 0), door + Vector3(0, 22, 0), 6.0, 0.1)
+	await _wait(1.5)
+	await _shot(state + "_door")
+	# From above the crest, out across the crater toward the Watcher.
+	var wp: Vector3 = hub.get_node("Landmarks").watcher_position()
+	var away := -Vector3(wp.x, 0, wp.z).normalized() * 520.0 + Vector3(0, 150, 0)
+	Game.camera.play_shot(away, wp + Vector3(0, 250, 0), 6.0, 0.1)
+	await _wait(1.5)
+	await _shot(state + "_watcher")
+	# The arch, from where you arrive.
+	var arch: Vector3 = hub.get_node("Art/StrataArch").global_position
+	var adir := Vector3(arch.x, 0, arch.z).normalized()
+	Game.camera.play_shot(arch + adir * 110.0 + Vector3(0, 8, 0), arch + Vector3(0, 30, 0) - adir * 50.0, 6.0, 0.1)
+	await _wait(1.5)
+	await _shot(state + "_arch")
 	Game.camera.play_shot(hub.get_node("Vortex").global_position + Vector3(260, 300, 260), hub.get_node("Vortex").global_position, 5.0, 0.5)
 	await _wait(1.5)
 	await _shot(state + "_eye")

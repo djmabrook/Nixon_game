@@ -12,9 +12,19 @@
 [ext_resource type="Script" path="res://hub/landmarks.gd" id="10"]
 [ext_resource type="Script" path="res://hub/hub_story.gd" id="11"]
 [ext_resource type="PackedScene" path="res://props/watching_set.tscn" id="12"]
+[ext_resource type="Script" path="res://hub/hub_art.gd" id="13"]
+[ext_resource type="Texture2D" path="res://hub/art/tex/sky_ember_night.png" id="14"]
+[ext_resource type="Texture2D" path="res://hub/art/tex/sky_dawn.png" id="15"]
+[ext_resource type="Texture2D" path="res://hub/art/tex/sun_pale.png" id="16"]
+[ext_resource type="Texture2D" path="res://hub/art/tex/sand_ridges_tile.png" id="17"]
+[ext_resource type="Texture2D" path="res://hub/art/tex/sky_pink_storm.png" id="18"]
 
 [sub_resource type="ShaderMaterial" id="sky_mat"]
 shader = ExtResource("9")
+shader_parameter/night_strip = ExtResource("14")
+shader_parameter/dawn_strip = ExtResource("15")
+shader_parameter/sun_tex = ExtResource("16")
+shader_parameter/storm_strip = ExtResource("18")
 
 [sub_resource type="Sky" id="sky"]
 sky_material = SubResource("sky_mat")
@@ -40,6 +50,7 @@ fog_height_density = 0.012
 [sub_resource type="ShaderMaterial" id="sand_mat"]
 render_priority = 0
 shader = ExtResource("4")
+shader_parameter/ridge_tile = ExtResource("17")
 
 [sub_resource type="ShaderMaterial" id="sea_mat"]
 render_priority = 0
@@ -195,9 +206,6 @@ mesh = SubResource("rock_mesh")
 transform = Transform3D(19.694, 0.000, -30.672, 0.000, 36.450, 0.000, 30.672, 0.000, 19.694, -1143.464, -6.750, 59.924)
 mesh = SubResource("rock_small")
 
-[node name="PalmWest" parent="Scenery" instance=ExtResource("7")]
-transform = Transform3D(-1.670, 0.000, 11.883, 0.000, 12.000, 0.000, -11.883, 0.000, -1.670, -1237.834, 33.000, 173.950)
-height = 5.0
 
 [node name="IslandEast" type="MeshInstance3D" parent="Scenery"]
 transform = Transform3D(38.691, 0.000, -11.969, 0.000, 40.500, 0.000, 11.969, 0.000, 38.691, 173.950, -4.500, -1237.834)
@@ -207,9 +215,6 @@ mesh = SubResource("rock_mesh")
 transform = Transform3D(19.694, 0.000, -30.672, 0.000, 36.450, 0.000, 30.672, 0.000, 19.694, 257.586, -6.750, -1115.697)
 mesh = SubResource("rock_small")
 
-[node name="PalmEast" parent="Scenery" instance=ExtResource("7")]
-transform = Transform3D(11.883, 0.000, -1.670, 0.000, 12.000, 0.000, 1.670, 0.000, 11.883, 173.950, 33.000, -1237.834)
-height = 5.0
 
 [node name="IslandNorth" type="MeshInstance3D" parent="Scenery"]
 transform = Transform3D(55.887, 0.000, -17.288, 0.000, 58.500, 0.000, 17.288, 0.000, 55.887, -1025.305, -4.500, -1025.305)
@@ -219,9 +224,6 @@ mesh = SubResource("rock_mesh")
 transform = Transform3D(28.447, 0.000, -44.303, 0.000, 52.650, 0.000, 44.303, 0.000, 28.447, -852.529, -6.750, -1016.031)
 mesh = SubResource("rock_small")
 
-[node name="PalmNorth" parent="Scenery" instance=ExtResource("7")]
-transform = Transform3D(8.485, 0.000, 8.485, 0.000, 12.000, 0.000, -8.485, 0.000, 8.485, -1025.305, 52.000, -1025.305)
-height = 5.0
 
 [node name="PalmShore0" parent="Scenery" instance=ExtResource("7")]
 transform = Transform3D(6.769, 0.000, -3.229, 0.000, 7.500, 0.000, 3.229, 0.000, 6.769, 927.288, 0.000, 248.467)
@@ -262,3 +264,6 @@ lean = 0.25
 transform = Transform3D(1.315, 0.000, -8.903, 0.000, 9.000, 0.000, 8.903, 0.000, 1.315, 652.403, 0.000, 724.565)
 height = 4.5
 lean = 0.30
+
+[node name="Art" type="Node3D" parent="."]
+script = ExtResource("13")

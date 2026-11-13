@@ -143,7 +143,7 @@ func apply_static() -> void:
 	var dawn := is_dawn()
 	_set_color_amount(1.0 if dawn else float(done.size()) / 3.0)
 	_set_ember(done.has(&"ember") or dawn, false)
-	_landmarks.set("pink_storm", done.has(&"salmon") or dawn)
+	_set_storm(1.0 if done.has(&"salmon") or dawn else 0.0)
 	_set_crimson(1.0 if done.has(&"crimson") or dawn else 0.0)
 	for i in hub.room_count():
 		var id: StringName = hub.room_at(i)
@@ -164,6 +164,10 @@ func _set_color_amount(a: float) -> void:
 	for palm in hub.get_node("Scenery").get_children():
 		if palm.get("color_amount") != null:
 			palm.set("color_amount", a)
+	for n in get_tree().get_nodes_in_group(&"hub_drainable"):
+		if hub.is_ancestor_of(n):
+			n.set("color_amount", a)
+	_landmarks.set("color_amount", a)
 	_env.ambient_light_color = Color(0.55, 0.52, 0.48).lerp(Color(0.75, 0.42, 0.36), a)
 	_env.fog_light_color = Color(0.16, 0.15, 0.14).lerp(Color(0.3, 0.06, 0.05), a)
 
@@ -183,6 +187,11 @@ func _set_ember(on: bool, staggered: bool) -> void:
 					stake.set("lit", true))
 		else:
 			stake.set("lit", on)
+
+
+func _set_storm(t: float) -> void:
+	_landmarks.set("pink_storm", t > 0.0)
+	_sky_mat.set_shader_parameter("storm_amount", t)
 
 
 func _set_crimson(t: float) -> void:
@@ -290,6 +299,7 @@ func _plant(ink_id: StringName) -> void:
 			_set_ember(true, true)
 		&"salmon":
 			_landmarks.set("pink_storm", true)
+			tw2.tween_method(_set_storm, 0.0, 1.0, effect_time)
 			var storm: Node3D = _landmarks.get_node("PinkStorm")
 			var home := storm.position
 			storm.position = home + Vector3(0, -200, 0)

@@ -9,6 +9,12 @@ extends Node3D
 const Palette := preload("res://hub/art_palette.gd")
 const ARCH := preload("res://hub/art/models/sand_strata_arch.glb")
 const COLOSSAL_PALM := preload("res://hub/art/models/colossal_palm.glb")
+const STONE_MAN := preload("res://hub/art/models/stone_littleman_c.glb")
+## The stone little man (pose c, looking up): one of the men the stare caught before him.
+## He stands on the beach just ahead of where the little man washes up, plinth half
+## buried, facing across the crater toward the Watcher. Stone, so he never drains or
+## changes, not even at dawn. x = distance from the centre, y = angle (degrees).
+@export var stone_man_at := Vector2(935.0, 43.0)
 const PALM_MESA := preload("res://hub/art/models/palm_mesa.glb")
 ## The trunk socket on the mesa's top, and how far each mesa stands in the sea.
 const MESA_SOCKET := Vector3(0, 56.0, 0)
@@ -68,6 +74,18 @@ func _ready() -> void:
 	arch.basis = Basis.looking_at(-out, Vector3.UP)
 	Palette.add_collision(arch)
 
+	# The stone little man, the first human shape you see, looking where you will.
+	var stone: Node3D = STONE_MAN.instantiate()
+	stone.name = "StoneLittleMan"
+	add_child(stone)
+	var sa := deg_to_rad(stone_man_at.y)
+	var sdir := Vector3(cos(sa), 0.0, sin(sa))
+	stone.position = sand.ground_point(Vector2(sdir.x, sdir.z) * stone_man_at.x) - Vector3(0, 0.18, 0)
+	var to_watcher: Vector3 = hub.get_node("Landmarks").watcher_position() - stone.position
+	to_watcher.y = 0.0
+	stone.basis = Basis.looking_at(-to_watcher.normalized(), Vector3.UP)   # front (+Z) toward the Watcher
+	Palette.add_collision(stone)
+
 	# Colossal palms, each planted in its own rock mesa.
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 2026
@@ -100,7 +118,7 @@ func _ready() -> void:
 		if n.name.begins_with("ColossalPalm") or n.name.begins_with("PalmIslet"):
 			_palm_entries.append_array(Palette.prepare(n))
 	for n in get_children():
-		if not (n.name.begins_with("ColossalPalm") or n.name.begins_with("PalmIslet")):
+		if not (n.name.begins_with("ColossalPalm") or n.name.begins_with("PalmIslet") or n == stone):
 			_entries.append_array(Palette.prepare(n))
 	_refresh()
 

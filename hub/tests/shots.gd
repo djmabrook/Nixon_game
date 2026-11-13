@@ -44,6 +44,13 @@ func _ready() -> void:
 	await _wait(1.0)
 	await _shot(state + "_arch")
 	await _wait(1.0)
+	# The stone little man, from just behind him, looking where he looks.
+	var stone: Node3D = hub.get_node("Art/StoneLittleMan")
+	var sf := stone.global_basis.z
+	Game.camera.play_shot(stone.global_position - sf * 4.5 + Vector3(1.2, 1.6, 0), stone.global_position + sf * 60.0 + Vector3(0, 12, 0), 1.5, 0.05)
+	await _wait(1.0)
+	await _shot(state + "_stone")
+	await _wait(1.0)
 	await _at(hub, 495.0, state + "_rim")
 	# The door at the end of groove 0, from in front of it.
 	var door: Vector3 = hub.stakes()[0].global_position

@@ -13,6 +13,7 @@ config/features=PackedStringArray("4.7", "Forward Plus")
 
 Game="*res://core/game.gd"
 Sound="*res://audio/sound.gd"
+Story="*res://story/story.gd"
 
 [display]
 

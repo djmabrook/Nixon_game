@@ -102,6 +102,7 @@ func _ready() -> void:
 	lb_material = Look.Lightbound.new(false)
 	head_material = Look.Lightbound.new(true)
 	_landmark = $Layout/Landmark
+	room_exiting.connect(_on_room_exiting)
 	focus_target = _landmark
 	Look.dress_night(self)
 	var lake := Look.make_lake(layout)
@@ -177,11 +178,12 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## In this region the fire is the only colour: the little man is drawn near-black.
 func _ink_the_little_man() -> void:
-	var ink := Look.mat(Color(0.05, 0.05, 0.055))
-	var slot := Game.player.carry_slot
-	for m: MeshInstance3D in Game.player.visual.find_children("*", "MeshInstance3D", true, false):
-		if m != slot and not slot.is_ancestor_of(m):
-			m.material_override = ink
+	Game.player.model.set_tint(Color(0.05, 0.05, 0.055))
+
+
+func _on_room_exiting() -> void:
+	if is_instance_valid(Game.player):
+		Game.player.model.reset_tint()
 
 
 ## Does whatever makes sense where the little man stands. Returns true if something happened.

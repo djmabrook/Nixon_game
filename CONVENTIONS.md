@@ -23,6 +23,7 @@ dither look over everything. Keep it original: our own places, shapes and palett
 | `boss/` | The face that moves only when unwatched | boss thread |
 | `shaders/` | Dither / pixel post-process and shared shaders | shader thread |
 | `art/` | Shared sprites, textures, palettes | sprites thread |
+| `audio/` | The `Sound` autoload, shared sound library, buses. Read `audio/AUDIO.md` | sound thread |
 | `tools/` | Dev scripts and the smoke test | anyone |
 
 **Stay in your folder.** If you need something changed in `core/`, `player/`, `camera/`, `main.tscn`
@@ -181,6 +182,8 @@ Rooms may pick their own palette and lighting; keep text and UI out.
 - Smoke test (run before every PR): `godot --headless --path . res://tools/smoke_test.tscn`.
   Exit code 0 means the hub, a room, the exit back, and the story hooks all work.
   It turns saving off, so it never touches your save.
+- Sound: everything audible goes through `Sound` and the nodes in `audio/` (see `audio/AUDIO.md`).
+  No voices, ever. Check with `godot --headless --path . res://tools/audio_test.tscn`.
 
 ## Git
 

@@ -4,7 +4,7 @@ extends MultiMeshInstance3D
 
 @export var stride := 0.72
 @export var gait_width := 0.2
-@export var print_size := Vector2(0.17, 0.3)
+@export var print_size := Vector2(0.2, 0.34)
 
 
 ## Lay `count` prints from `start` walking along `dir`. `ground` maps a point to the sand.

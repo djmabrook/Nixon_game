@@ -40,6 +40,7 @@ func _run() -> void:
 		await _until(func() -> bool: return Story.current_sequence() == &"opening", 10.0)
 	else:
 		_press_any()
+		await _until(func() -> bool: return Story.current_sequence() == &"opening", 5.0)
 	# Opening.
 	_check(Story.current_sequence() == &"opening", "any button begins the opening")
 	if _shots != "":
@@ -82,7 +83,7 @@ func _run() -> void:
 	else: _check(Story.get_flag(Story.FLAG_FIRST_DESCENT_SEEN, false), "the first descent plays its stadium shot (y %.0f)" % wall.y)
 	if _shots != "":
 		await _secs(4.0); await _shot("10_descent_stadium")
-		await _secs(5.5); await _shot("11_descent_speck")
+		await _secs(5.0); await _shot("11_descent_late")
 	await _until(func() -> bool: return not Story.is_playing(), 40.0)
 	_check(Game.player.controls_enabled, "control back after the descent")
 

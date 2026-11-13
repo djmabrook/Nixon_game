@@ -61,14 +61,21 @@ func anchor(anchor_name: StringName) -> Node3D:
 
 
 ## The sand under a point (a straight-down ray on the world layer). Falls back to the point.
-func ground(p: Vector3) -> Vector3:
-	var hit := ground_hit(p)
+## `probe_up` is how far above `p` the ray starts: keep it small near the shore so a tall
+## invisible wall's top is never mistaken for sand.
+func ground(p: Vector3, probe_up := 400.0) -> Vector3:
+	var hit := ground_hit(p, probe_up)
 	return hit.position if not hit.is_empty() else p
 
 
-func ground_hit(p: Vector3) -> Dictionary:
+## The sand near the shore: probes from just above the wake spot's height.
+func sand(p: Vector3) -> Vector3:
+	return ground(Vector3(p.x, wake.y, p.z), 6.0)
+
+
+func ground_hit(p: Vector3, probe_up := 400.0) -> Dictionary:
 	var space := room.get_world_3d().direct_space_state
-	var q := PhysicsRayQueryParameters3D.create(p + Vector3.UP * 400.0, p + Vector3.DOWN * 600.0, WORLD_MASK)
+	var q := PhysicsRayQueryParameters3D.create(p + Vector3.UP * probe_up, p + Vector3.DOWN * 600.0, WORLD_MASK)
 	q.hit_back_faces = false
 	var hit := space.intersect_ray(q)
 	# Ignore thin vertical walls (a shore wall's top): we want sand.
@@ -81,7 +88,7 @@ func ground_hit(p: Vector3) -> Dictionary:
 ## A point on the shore: `out` metres seaward of the wake spot (negative goes inland)
 ## and `side` metres along the tideline, standing on the sand.
 func shore_point(side: float, out := 0.0) -> Vector3:
-	return ground(wake + along * side - inland * out)
+	return sand(wake + along * side - inland * out)
 
 
 ## Walk out from the pit through the default spawn until the sand dips under the sea or

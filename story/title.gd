@@ -48,10 +48,18 @@ func _ready() -> void:
 	_overlay.name = "TitleOverlay"
 	add_child(_overlay)
 
-	# Out in the shallows, low, looking up the beach at the ridge.
+	# Out in the shallows, low, looking up the beach at the ridge. After the ending the
+	# camera sits lower and nearer, so his prints run past it and out of the right edge.
 	var look := shore.wake + shore.inland * 70.0 + Vector3.UP * 26.0
-	cut(title_eye(shore), look, 44.0)
-	glide(title_eye(shore) + shore.inland * 6.0 + Vector3.UP * 0.6, look + Vector3.UP * 4.0, 45.0, 42.0)
+	if _mode == &"after_ending":
+		var start := shore.shore_point(-6.0, -1.0)
+		var eye := shore.sand(start + shore.along * 7.0 - shore.inland * 8.0) + Vector3.UP * 2.0
+		look = start + shore.along * 3.0 + shore.inland * 30.0 + Vector3.UP * 7.0
+		cut(eye, look, 46.0)
+		glide(eye - shore.inland * 1.5 + Vector3.UP * 0.3, look + Vector3.UP * 1.0, 45.0, 44.0)
+	else:
+		cut(title_eye(shore), look, 44.0)
+		glide(title_eye(shore) + shore.inland * 6.0 + Vector3.UP * 0.6, look + Vector3.UP * 4.0, 45.0, 42.0)
 	(dressing.audio as Node).set(&"surf", 1.0)
 
 	await wait(2.0)
@@ -104,4 +112,4 @@ func _lay_footprints(dressing: Node) -> void:
 	trail.global_transform = Transform3D.IDENTITY
 	# From where he stood, along the tideline and out of the picture.
 	var start := shore.shore_point(-6.0, -1.0)
-	trail.lay(start, shore.along, 140, shore.ground, 0.0)
+	trail.lay(start, shore.along, 140, shore.sand, 0.0)

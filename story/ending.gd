@@ -77,6 +77,9 @@ func _still_the_hub() -> void:
 	var vortex := hub.get_node_or_null(^"Vortex") as Area3D
 	if vortex:
 		vortex.set_deferred(&"monitoring", false)
+		for c in vortex.get_children():
+			if c is CPUParticles3D or c is GPUParticles3D:
+				c.emitting = false
 	var landmarks := hub.get_node_or_null(^"Landmarks")
 	if landmarks and landmarks.has_method(&"set_layer"):
 		landmarks.call(&"set_layer", &"watcher", true)
@@ -171,8 +174,8 @@ func _rise() -> void:
 	p.global_position = pit + Vector3.DOWN * 10.0
 	p.visual.scale = Vector3.ONE * 0.15
 	p.visual.visible = true
-	cut(pit + Vector3.UP * 110.0 + out * 70.0, pit, 38.0)
-	glide(pit + Vector3.UP * 55.0 + out * 40.0 + out.cross(Vector3.UP) * 18.0, pit + Vector3.UP * 2.0, 9.0, 34.0)
+	cut(pit + Vector3.UP * 40.0 + out * 45.0, pit + Vector3.UP * 1.0, 34.0)
+	glide(pit + Vector3.UP * 9.0 + out * 16.0 + out.cross(Vector3.UP) * 6.0, pit + Vector3.UP * 1.2, 9.0, 40.0)
 	create_tween().tween_property(overlay, "curtain", 0.0, 2.5 * time_scale)
 	var rise_t := create_tween()
 	rise_t.tween_method(_aim_sun, 0.0, 0.35, 10.0 * time_scale)
@@ -210,13 +213,13 @@ func _whole_land() -> void:
 	rise_t.tween_method(_aim_sun, 0.35, 0.7, 30.0 * time_scale)
 
 	var close := _walk_start - shore.inland * 7.0 - shore.along * 3.0 + Vector3.UP * 2.0
-	var land_centre := shore.pit + (shore.pit - shore.wake).normalized() * 600.0
+	var land_centre := shore.pit + (shore.pit - shore.wake).normalized() * 250.0
 	cut(close, _walk_start + Vector3.UP * 1.0, 40.0)
 	create_tween().tween_property(overlay, "curtain", 0.0, 1.6 * time_scale)
 	await wait(2.2)
 	# Out to sea and up, further than anything before: he becomes a speck, then nothing,
 	# and the whole land lies there in the morning.
-	var far := shore.wake - shore.inland * 1900.0 + Vector3.UP * 820.0 - shore.along * 260.0
+	var far := shore.wake - shore.inland * 1500.0 + Vector3.UP * 1250.0 - shore.along * 300.0
 	var path := PackedVector3Array([
 		close,
 		_walk_start - shore.inland * 40.0 + Vector3.UP * 14.0,
@@ -224,6 +227,8 @@ func _whole_land() -> void:
 		far,
 	])
 	var looks := [_walk_start + Vector3.UP * 1.0, land_centre]
+	# Clear air for the widest view, so the far regions stand out against the morning.
+	create_tween().tween_property(env, "fog_density", 0.00008, 8.0 * time_scale)
 	var t := track(path, func() -> Vector3:
 		var w := clampf((cam.global_position.distance_to(close)) / close.distance_to(far), 0.0, 1.0)
 		return (looks[0] as Vector3).lerp(looks[1], smoothstep(0.0, 0.55, w))
@@ -236,6 +241,7 @@ func _whole_land() -> void:
 		var w := clampf(1.0 - cam.global_position.distance_to(_walk_start) / far.distance_to(_walk_start), 0.0, 1.0)
 		return (looks[1] as Vector3).lerp(p.global_position + Vector3.UP * 1.0, smoothstep(0.3, 0.95, w))
 	, 12.0, 52.0, 45.0)
+	create_tween().tween_property(env, "fog_density", 0.00045, 10.0 * time_scale)
 	await t2.finished
 
 
@@ -270,8 +276,10 @@ func _let_go() -> void:
 	hold()
 	p.controls_enabled = true    # he is still his own; only the camera has stopped
 	var here := p.global_position
-	var eye := here - shore.inland * 24.0 + shore.along * 5.0 + Vector3.UP * 3.2
-	var look := here + shore.along * 14.0 + shore.inland * 10.0 + Vector3.UP * 5.0
+	# Side-on to the tideline so he walks out of the right of the picture, into the sun.
+	var fwd := Vector3.UP.cross(shore.along).normalized()
+	var eye := shore.sand(here - fwd * 24.0 + shore.along * 5.0) + Vector3.UP * 3.2
+	var look := here + shore.along * 14.0 + fwd * 10.0 + Vector3.UP * 5.0
 	await glide(eye, look, 4.0, 42.0).finished
 	_locked_at = Time.get_ticks_msec() / 1000.0
 	dressing.audio.set(&"dawn", 0.6)

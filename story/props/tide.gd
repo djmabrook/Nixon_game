@@ -42,7 +42,7 @@ func build(shore) -> void:
 			var u := lerpf(-half_length, half_length, float(i) / nx)
 			var v := lerpf(-inland_reach, sea_reach, float(j) / ny)
 			var p: Vector3 = shore.wake + shore.along * u - shore.inland * v
-			var g: Vector3 = shore.ground(p)
+			var g: Vector3 = shore.sand(p)
 			p.y = maxf(g.y + 0.05, shore.sea_level + 0.02)
 			st.set_uv(Vector2(u, v))
 			st.add_vertex(p)

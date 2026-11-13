@@ -245,17 +245,16 @@ func _tv_beat() -> void:
 	facing = facing.normalized()
 	var side := facing.cross(Vector3.UP)
 	dressing.audio.set(&"hum", 1.0)
-	drain_to(0.75, 1.2)
+	drain_to(0.45, 1.2)
 	if is_instance_valid(stray) and stray.has_method(&"cower"):
 		stray.call(&"cower", tv.global_position)
 	# Behind him and low, the set looming with its eyes on him; push in slowly.
-	var behind := p.global_position - facing * -7.5 + side * 2.5
 	var hd := (p.global_position - tv.global_position)
 	hd.y = 0.0
 	var away := hd.normalized()
-	behind = p.global_position + away * 7.0 + side * 2.2 + Vector3.UP * 1.1
-	cut(behind, screen, 40.0)
-	await glide(p.global_position + away * 4.5 + side * 1.4 + Vector3.UP * 1.0, screen + Vector3.UP * 0.5, 4.5, 34.0).finished
+	var aside := away.cross(Vector3.UP)
+	cut(p.global_position + away * 10.0 + aside * 3.2 + Vector3.UP * 1.3, screen, 34.0)
+	await glide(p.global_position + away * 7.0 + aside * 2.4 + Vector3.UP * 1.1, screen + Vector3.UP * 0.4, 4.5, 28.0).finished
 	# What it sees: him, small, from right at the glass.
 	cut(screen + facing * 1.2 + Vector3.UP * 0.2, p.global_position + Vector3.UP * 1.0, 28.0)
 	await wait(2.2)
@@ -297,11 +296,8 @@ func _descent_beat() -> void:
 	_autowalk = down
 	var ahead := shore.ground(p.global_position + down * 38.0 + side * 9.0) + Vector3.UP * 2.0
 	var ahead2 := shore.ground(p.global_position + down * 30.0 + side * 12.0) + Vector3.UP * 1.4
-	await track(PackedVector3Array([ahead, ahead2]), func() -> Vector3: return p.global_position + Vector3.UP * 6.0, 7.5, 34.0, 30.0).finished
+	await track(PackedVector3Array([ahead, ahead2]), func() -> Vector3: return p.global_position + Vector3.UP * 6.0, 10.0, 34.0, 28.0).finished
 	# Then from high over the pit: a speck on the crater wall.
-	var over := shore.pit + Vector3.UP * 150.0 - down * 60.0 + side * 40.0
-	cut(over, p.global_position, 42.0)
-	await track(PackedVector3Array([over, over + Vector3.UP * 25.0 + side * 20.0]), func() -> Vector3: return p.global_position, 5.0, 42.0, 38.0).finished
 	_autowalk = Vector3.ZERO
 	await release(2.0)
 	_beat_running = false

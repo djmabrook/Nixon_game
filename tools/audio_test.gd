@@ -39,10 +39,12 @@ func _ready() -> void:
 	await Game.start(world)
 	await get_tree().process_frame
 	var ears := Sound.listener_position()
+	var room_lateness := Sound.lateness  # the hub sets its own lateness; test the base rule at 1.0
+	Sound.lateness = 1.0
 	_check(absf(Sound.delay_for(ears + Vector3(0, 0, -343.0)) - 1.0) < 0.01, "343 m away arrives 1 s late")
 	Sound.lateness = 2.0
 	_check(absf(Sound.delay_for(ears + Vector3(0, 0, -343.0)) - 2.0) < 0.01, "lateness scales the delay")
-	Sound.lateness = 1.0
+	Sound.lateness = room_lateness
 
 	# Beds crossfade.
 	Sound.set_bed(&"bed_hub_night", -3.0, 0.1)

@@ -18,7 +18,7 @@ func _ready() -> void:
 	_check(Game.current_room != null and Game.current_room.room_id == Game.HUB_ID, "starts in hub")
 	_check(is_instance_valid(Game.player), "player spawned in hub")
 	_check(is_instance_valid(Game.camera) and Game.camera.projection == Camera3D.PROJECTION_PERSPECTIVE and Game.camera.far >= 1000.0, "perspective camera with long draw distance")
-	_check(Game.list_rooms().has(&"test_room"), "test_room discovered")
+	_check(Game.list_rooms(true).has(&"test_room") and not Game.list_rooms().has(&"test_room"), "test_room discovered but kept out of the hub")
 	_check(not Game.list_rooms().has(&"_template"), "_template skipped")
 
 	await Game.go_to(&"test_room")

@@ -71,14 +71,21 @@ func start(world: Node, first_room: StringName = HUB_ID) -> void:
 	await go_to(first_room)
 
 
-## Every room id found under res://rooms/ (folders starting with "_" are skipped).
-func list_rooms() -> Array[StringName]:
+## Rooms that exist for testing only. They load by id but never get a door.
+const DEV_ROOMS: Array[StringName] = [&"test_room"]
+
+
+## Every room id found under res://rooms/ (folders starting with "_" are skipped,
+## and DEV_ROOMS unless include_dev is true).
+func list_rooms(include_dev := false) -> Array[StringName]:
 	var ids: Array[StringName] = []
 	var dir := DirAccess.open(ROOMS_DIR)
 	if dir == null:
 		return ids
 	for folder in dir.get_directories():
 		if folder.begins_with("_") or folder.begins_with("."):
+			continue
+		if not include_dev and DEV_ROOMS.has(StringName(folder)):
 			continue
 		if ResourceLoader.exists(room_path(folder)):
 			ids.append(StringName(folder))

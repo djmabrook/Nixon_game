@@ -14,8 +14,6 @@ uniform vec3 drained_horizon : source_color = vec3(0.55, 0.52, 0.45);
 // Dawn: 0 night, 1 sunrise. The sun rises where the palm shadows have always pointed.
 uniform float dawn = 0.0;
 uniform vec3 sun_dir = vec3(-0.7, 0.08, -0.7);
-uniform vec3 dawn_zenith : source_color = vec3(0.25, 0.38, 0.62);
-uniform vec3 dawn_horizon : source_color = vec3(1.0, 0.72, 0.45);
 
 // Painted strips (art/tex): the night horizon, the dawn horizon, and the pale sun.
 // Each strip wraps once around the horizon; its bottom row sits on the horizon line
@@ -32,6 +30,8 @@ uniform float storm_spread = 1.1;
 uniform float strip_repeat = 2.0;
 uniform sampler2D sun_tex : source_color, filter_nearest;
 uniform float strip_height = 0.42;
+// The dawn strip covers more of the sky: its top row reaches this EYEDIR.y.
+uniform float dawn_strip_height = 0.8;
 uniform float strip_amount = 1.0;
 uniform float sun_size = 0.09;
 
@@ -62,13 +62,12 @@ void sky() {
 	night_col = mix(night_col, storm_col, storm_k * step(0.12, dot(storm_col, vec3(0.3, 0.59, 0.11))));
 	col = mix(col, night_col, strip_mask);
 
-	vec3 day = mix(dawn_horizon, dawn_zenith, smoothstep(0.0, 0.5, y));
-	// The dawn strip's top rows are still night, so it fades out well before them.
-	float dawn_mask = step(0.0, y) * (1.0 - smoothstep(strip_height * 0.2, strip_height * 0.6, y)) * strip_amount;
-	day = mix(day, textureLod(dawn_strip, suv, 0.0).rgb, dawn_mask);
+	// Dawn is the painted dawn strip stretched up the whole sky (its top row is the zenith),
+	// with no smooth gradient, so it keeps its dither and its palette.
+	vec2 duv = vec2(suv.x, 1.0 - clamp(y / dawn_strip_height, 0.0, 1.0));
+	vec3 day = textureLod(dawn_strip, duv, 0.0).rgb;
 	vec3 sd = normalize(sun_dir);
 	float sun_dot = max(dot(EYEDIR, sd), 0.0);
-	day += vec3(1.0, 0.8, 0.5) * pow(sun_dot, 12.0) * 0.6;
 	// The pale sun sprite, flat-on to the eye.
 	vec3 s_right = normalize(cross(vec3(0.0, 1.0, 0.0), sd));
 	vec3 s_up = cross(sd, s_right);

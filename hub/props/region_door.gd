@@ -7,6 +7,7 @@ extends Node3D
 
 const Palette := preload("res://hub/art_palette.gd")
 const DOOR := preload("res://hub/art/models/mega_door_monolith.glb")
+const RUST := Color(0.39, 0.06, 0.023)
 const HAND := preload("res://hub/art/models/usher_hand_plaza.glb")
 
 @export var color := Color(1.0, 0.35, 0.1):
@@ -54,6 +55,10 @@ func _ready() -> void:
 				deg_to_rad(float(seed_from % 13) - 6.0), deg_to_rad(float(seed_from % 11) - 5.0))
 	_ink_mats = Palette.material_named(_model, "ember")
 	_entries = Palette.prepare(_model, ["ember"])
+	# Until the per-region variants land, the door's shadowed trim reads as rust.
+	for e in _entries:
+		if (e[0] as StandardMaterial3D).resource_name == "bone_lo":
+			e[1] = RUST
 	Palette.add_collision(_model)
 	_light = OmniLight3D.new()
 	_light.position = Vector3(0, 30.0 if hand else 22.0 - sink * 0.5, 14.0)

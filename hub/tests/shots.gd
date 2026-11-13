@@ -22,6 +22,7 @@ func _ready() -> void:
 			Game.set_meta(&"hub_eye_open", true)
 			if state == "dawn":
 				Game.set_flag(&"dawn", true)
+	_add_dither()
 	var w := Node3D.new()
 	add_child(w)
 	await Game.start(w)
@@ -72,3 +73,19 @@ func _shot(name: String) -> void:
 	await RenderingServer.frame_post_draw
 	get_viewport().get_texture().get_image().save_png(out + name + ".png")
 	print("saved ", name)
+
+
+## The game's dither pass, when the dither look (shaders/, PR #2) is in this checkout.
+func _add_dither() -> void:
+	if not ResourceLoader.exists("res://shaders/dither_look.tscn"):
+		return
+	var layer := CanvasLayer.new()
+	layer.layer = 50
+	add_child(layer)
+	var d: Node = load("res://shaders/dither_look.tscn").instantiate()
+	d.set("follow_rooms", false)
+	var preset := {"drained": "hub_inks_0", "planting": "hub_inks_1", "full": "hub_inks_3", "dawn": "dawn"}.get(state, "hub_inks_0") as String
+	var path := "res://shaders/presets/%s.tres" % preset
+	if ResourceLoader.exists(path):
+		d.set("look", load(path))
+	layer.add_child(d)

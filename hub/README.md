@@ -26,7 +26,7 @@ appears. Bring a room's ink home and its groove runs full (see Story below).
 | `art_palette.gd` | Drains imported models to bone and black and brings their colour back with the inks |
 | `art/` | The approved models (`.glb`, metre scale) and painted textures |
 | `footprints.gd`, `footprint.gdshader` | His trail, drawn prints that lose their dither dots as they fade |
-| `props/` | `region_door` (door or, for the mountain groove, the usher's hand plaza), the procedural shore palm, the old ember stake |
+| `props/` | `region_door` (each region's door, by room id; the mountain groove also gets the usher's hand plaza beside it), the procedural shore palm, the old ember stake |
 | `tests/hub_test.tscn` | Headless check: every groove leads to its room and back |
 | `tests/shots.tscn` | Dev only: saves screenshots along groove 0 (`-- --out=<dir>`) |
 

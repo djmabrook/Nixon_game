@@ -287,7 +287,7 @@ func arm_point(i: int, r: float) -> Vector3:
 func _add_arm(i: int) -> void:
 	var id := _ids[i]
 	# A sunken bone door at the outer end of the groove, lit in the room's colour once ember
-	# is home. The groove that opens with the eye ends at the usher's open hand instead.
+	# is home. The groove that opens with the eye also gets the usher's open hand beside its door.
 	var stake: Node3D = DOOR_SCENE.instantiate()
 	stake.name = "Door_%s" % id
 	stake.set("hand", opens_with_eye(id))

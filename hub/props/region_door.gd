@@ -2,7 +2,7 @@ extends Node3D
 ## The door at the outer end of each room's groove: a bone monolith some 70 m tall, half
 ## sunk in the sand and leaning, its doorway a slot of black. The ember sliver over the
 ## doorway (and the light pooling out of it) takes the room's ink colour once it is lit.
-## The mountain groove ends at the usher's open hand instead (hand = true).
+## The mountain groove's door also has the usher's open hand plaza beside it (hand = true).
 ## Same exports as the old ember stake: color, lit, light_range.
 
 const Palette := preload("res://hub/art_palette.gd")
@@ -25,7 +25,7 @@ const HAND := preload("res://hub/art/models/usher_hand_plaza.glb")
 ## Which door model (art/models/<variant>.glb): mega_door_monolith, or a region's own
 ## door_lake, door_grid, door_checker, door_watcher. They share size, pivot and opening.
 @export var variant := &"mega_door_monolith"
-## Build the usher's hand plaza instead of a door (the groove that opens with the eye).
+## Add the usher's hand plaza beside the door (the groove that opens with the eye).
 @export var hand := false
 ## How far the model is sunk into the sand, in metres.
 @export var sink := 18.0
@@ -48,26 +48,32 @@ func _ready() -> void:
 	var path := MODELS % variant
 	if not ResourceLoader.exists(path):
 		path = MODELS % "mega_door_monolith"
-	_model = (HAND if hand else load(path) as PackedScene).instantiate()
+	_model = (load(path) as PackedScene).instantiate()
 	add_child(_model)
 	var seed_from := hash(name)
 	_phase = float(seed_from % 1000) / 1000.0 * TAU
-	if hand:
-		_model.position.y = -3.0
-	else:
-		_model.position.y = -sink
-		# Each door leans its own way, as if the sand had shifted under it.
-		_model.rotation = Vector3(deg_to_rad(-4.0 - float(seed_from % 5)),
-				deg_to_rad(float(seed_from % 13) - 6.0), deg_to_rad(float(seed_from % 11) - 5.0))
+	_model.position.y = -sink
+	# Each door leans its own way, as if the sand had shifted under it.
+	_model.rotation = Vector3(deg_to_rad(-4.0 - float(seed_from % 5)),
+			deg_to_rad(float(seed_from % 13) - 6.0), deg_to_rad(float(seed_from % 11) - 5.0))
 	_ink_mats = Palette.material_named(_model, "ember")
 	_entries = Palette.prepare(_model, ["ember"])
-	# Until the per-region variants land, the door's shadowed trim reads as rust.
+	# The plain monolith's shadowed trim reads as rust (the region doors have their own trim).
 	for e in _entries:
 		if (e[0] as StandardMaterial3D).resource_name == "bone_lo":
 			e[1] = RUST
 	Palette.add_collision(_model)
+	if hand:
+		# Palm up beside the doorway, a little toward the crater, offering the way in.
+		var h: Node3D = HAND.instantiate()
+		h.name = "HandPlaza"
+		add_child(h)
+		h.position = Vector3(62.0, -3.0, 14.0)
+		h.rotation.y = deg_to_rad(-20.0)
+		_entries.append_array(Palette.prepare(h))
+		Palette.add_collision(h)
 	_light = OmniLight3D.new()
-	_light.position = Vector3(0, 30.0 if hand else 22.0 - sink * 0.5, 14.0)
+	_light.position = Vector3(0, 22.0 - sink * 0.5, 14.0)
 	_light.omni_attenuation = 1.2
 	add_child(_light)
 	Palette.apply(_entries, color_amount)

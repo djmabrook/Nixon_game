@@ -34,6 +34,19 @@ func _ready() -> void:
 	face._awake_in = 0.0
 	await _frames(5)
 	_check(absf(face.global_position.y - land.UPPER_Y) < 1.0, "the Watcher sits on the upper plain")
+	var raised: Array = room.statues.raised
+	var facing := 0
+	var on_him := 0
+	for st: Node3D in raised:
+		var to := (face.centre() - st.global_position) * Vector3(1, 0, 1)
+		if st.global_basis.z.dot(to.normalized()) > 0.98:
+			facing += 1
+		if st.get_parent() == face:
+			on_him += 1
+	_check(raised.size() >= 30 and facing == raised.size(), "%d stone men, all facing the face" % raised.size())
+	_check(on_him >= 10, "%d of them on his tie road" % on_him)
+	var furthest: float = room.statues.furthest_native_z()
+	_check(furthest > 2.95 and furthest < 3.7, "the furthest one stands just below the landing (z %.2f)" % furthest)
 	_check(face.climb_body != null, "the Watcher is climbable (his own collision)")
 	for pin in [["Foot", 12.0], ["ExitDisc", 2.0]]:
 		var at: Vector3 = room.find_child(pin[0], true, false).global_position
@@ -146,6 +159,7 @@ func _ready() -> void:
 		if (mi as MeshInstance3D).material_override != null:
 			stone = true
 	_check(stone and room.get_node("Screen/Negative").visible, "caught: stone and the Negative")
+	_check(room.get_node_or_null("HisStatue") != null, "he becomes one of them (forearm raised)")
 	await _until(func(): return Game.current_room.get_instance_id() != old_id and not Game.is_travelling(), 6.0)
 	_check(Game.current_room.get_instance_id() != old_id, "the moment rewinds")
 	_check(Game.player.global_position.distance_to(Game.current_room.get_node("from_hub").global_position) < 1.0, "back at the start")

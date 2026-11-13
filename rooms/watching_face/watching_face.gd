@@ -22,6 +22,8 @@ extends Room
 ## and walks past the head. The black disc on the shoulder behind it takes him home.
 
 const BRAND := preload("res://rooms/watching_face/models/brand.glb")
+const STONE_POSE_B := preload("res://rooms/watching_face/models/stone_littleman_b.glb")
+const STATUES := preload("res://rooms/watching_face/statues.gd")
 
 ## Points on the climbable Watcher, in his model's own units (x50 in the room).
 ## The landing where the tie road ends under his chin: raise the ember here.
@@ -80,6 +82,8 @@ var _last_tile := Vector3.INF
 var _effective_stare := 0.0
 var _sky_mat: ShaderMaterial
 var _plateau_shot := false
+## The stone little men (statues.gd).
+var statues: Node3D
 
 
 func _ready() -> void:
@@ -120,10 +124,21 @@ func _on_room_entered(_spawn: StringName) -> void:
 	exit_disc.body_entered.connect(_on_exit_disc_entered)
 	(face.get_node(^"PlateauVista") as Area3D).body_entered.connect(_on_plateau)
 	floor_mat.set_shader_parameter(&"face_radius", face.head_radius())
+	_raise_statues()
 	# The reveal: pull far back so he is a speck on the grid, and the Watcher opens his eyes.
 	face.open_eyes(3.0)
 	if DisplayServer.get_name() != "headless":
 		_opening_shot()
+
+
+## The men the stare caught before him (sight checks need the physics world, so wait a frame).
+func _raise_statues() -> void:
+	statues = STATUES.new()
+	statues.name = "Statues"
+	add_child(statues)
+	await get_tree().physics_frame
+	if is_instance_valid(statues):
+		statues.raise(face, land)
 
 
 ## The reveal, on a long lens: from far back the telephoto stacks the stairs, the grid and
@@ -423,6 +438,15 @@ func _turn_to_stone(player: Player) -> void:
 	stone.roughness = 1.0
 	for mi in player.find_children("*", "MeshInstance3D", true, false):
 		(mi as MeshInstance3D).material_override = stone
+		(mi as MeshInstance3D).visible = false
+	# He becomes one of them: the same statue as the others on the upper road, forearm raised
+	# against the stare, facing the face.
+	var statue := STONE_POSE_B.instantiate() as Node3D
+	statue.name = "HisStatue"
+	add_child(statue)
+	statue.global_position = player.global_position + Vector3.DOWN * 0.35
+	var to := face.centre() - statue.global_position
+	statue.global_rotation = Vector3(0.0, atan2(to.x, to.z), 0.0)
 
 
 # --- Ink props (placeholders) --------------------------------------------------------

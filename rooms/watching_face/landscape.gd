@@ -52,6 +52,7 @@ var _mats := {}
 func _ready() -> void:
 	_build_stairs()
 	_build_upper_plain()
+	_lay_cloud_bands()
 	_raise_cover()
 
 
@@ -155,6 +156,39 @@ func _hide_meshes(n: Node) -> void:
 		(n as MeshInstance3D).visible = false
 	for c in n.get_children():
 		_hide_meshes(c)
+
+
+# --- Cloud bands ----------------------------------------------------------------
+
+const CLOUD_BAND := preload("res://rooms/watching_face/textures/cloud_band_strip.png")
+## Bands of cloud lying across the stair field partway up: [height, z, quad height, alpha].
+## The strip's cloud fills only the middle quarter of its height, so the quads are tall.
+## Hiding part of the climb makes it read larger than it is.
+const CLOUD_BANDS := [[40.0, 535.0, 150.0, 0.85], [78.0, 478.0, 110.0, 0.7]]
+
+
+func _lay_cloud_bands() -> void:
+	var width := STAIR_HALF_W * 2.4
+	for b in CLOUD_BANDS:
+		var m := StandardMaterial3D.new()
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		m.albedo_texture = CLOUD_BAND
+		# Ultraviolet-grey, so the cloud belongs to his sky.
+		m.albedo_color = Color(0.56, 0.5, 0.72, b[3])
+		m.texture_repeat = true
+		# The strip is 8:1; repeat it sideways at its own aspect.
+		m.uv1_scale = Vector3(width / (b[2] * 8.0), 1.0, 1.0)
+		var q := QuadMesh.new()
+		q.size = Vector2(width, b[2])
+		var mi := MeshInstance3D.new()
+		mi.name = "CloudBand"
+		mi.mesh = q
+		mi.material_override = m
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mi.position = Vector3(0, b[0], b[1])
+		add_child(mi)
 
 
 # --- The upper plain -----------------------------------------------------------

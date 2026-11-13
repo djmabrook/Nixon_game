@@ -405,7 +405,12 @@ func _on_exit_disc_entered(body: Node3D) -> void:
 	_leaving = true
 	complete()
 	await get_tree().create_timer(1.0).timeout
-	exit_to_hub()
+	# This is the last room: the Story autoload (opening/ending) plays the dawn walk out.
+	var story := get_node_or_null(^"/root/Story")
+	if story and story.has_method(&"begin_ending"):
+		story.call(&"begin_ending")
+	else:
+		exit_to_hub()
 
 
 func _reset() -> void:

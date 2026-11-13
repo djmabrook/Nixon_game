@@ -273,6 +273,17 @@ func _build_land() -> void:
 	Look.lb(lb_material, Look.box(landing.size), Look.STONE, lc, layout)
 	Look.lb(lb_material, Look.box(Vector3(18.4, 0.3, 0.3)), Look.INK, lc + Vector3(0, 0.4, 4.05), layout)
 	Look.make_doorway(mountain_exit)
+	# One man the stare caught, at the mountain's foot, still looking up at the rock. Met in
+	# the dark by torchlight just before the brazier; the reveal shows what he was looking at.
+	var caught: Node3D = Look.CaughtScene.instantiate()
+	caught.name = "CaughtMan"
+	caught.position = Vector3(-4.4, TOWER_STEP_Y, -1100.0)
+	caught.rotation.y = PI  # front is +Z: turn him to face the mountain
+	layout.add_child(caught)
+	Look.make_lightbound(caught, lb_material, Color(0.5, 0.5, 0.48))
+	var plinth := BoxShape3D.new()
+	plinth.size = Vector3(0.9, 2.0, 0.9)
+	Look.solid(layout, "CaughtManBody", plinth, Transform3D(Basis.IDENTITY, caught.position + Vector3(0, 1.0, 0)))
 
 
 func _build_crossing() -> void:

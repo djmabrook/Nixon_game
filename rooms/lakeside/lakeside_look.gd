@@ -17,6 +17,7 @@ const BareTreeScene := preload("res://rooms/lakeside/art/bare_tree.glb")
 const BeaconScene := preload("res://rooms/lakeside/art/lake_beacon.glb")
 const BeaconLitScene := preload("res://rooms/lakeside/art/lake_beacon_lit.glb")
 const BrandScene := preload("res://props/carry/ember_brand.glb")
+const CaughtScene := preload("res://rooms/lakeside/art/stone_littleman_c.glb")
 const BustScene := preload("res://rooms/lakeside/art/watcher_bust_v2.glb")
 
 const INK := Color(0.03, 0.03, 0.035)

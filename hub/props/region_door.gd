@@ -62,6 +62,15 @@ func _ready() -> void:
 	for e in _entries:
 		if (e[0] as StandardMaterial3D).resource_name == "bone_lo":
 			e[1] = RUST
+	# Each region door's architrave carries its region's painted trim strip.
+	var trim_path := "res://hub/art/tex/door_trim_%s.png" % String(variant).trim_prefix("door_")
+	for e in _entries:
+		var m := e[0] as StandardMaterial3D
+		if m.resource_name == "trim" and ResourceLoader.exists(trim_path):
+			m.albedo_texture = load(trim_path)
+			m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST_WITH_MIPMAPS
+			e[1] = Color.WHITE
+			e[2] = Palette.TEXTURED_DRAINED
 	Palette.add_collision(_model)
 	if hand:
 		# Palm up beside the doorway, a little toward the crater, offering the way in.

@@ -41,6 +41,12 @@ const SHADER := preload("res://hub/horizon.gdshader")
 		color_amount = v
 		for m in _mats:
 			m.set_shader_parameter("color_amount", v)
+## 0 night to 1 dawn: cut-outs with a painted _dawn version switch to it.
+@export_range(0.0, 1.0) var dawn := 0.0:
+	set(v):
+		dawn = v
+		for m in _mats:
+			m.set_shader_parameter("dawn", v)
 ## Color the far silhouettes lean toward, standing in for atmospheric haze.
 @export var haze := Color(0.32, 0.07, 0.06)
 
@@ -99,6 +105,12 @@ func _cutout(parent: Node3D, tex_name: String, dist: float, deg: float, width: f
 	m.set_shader_parameter("tex", tex)
 	m.set_shader_parameter("haze", Color(haze.r, haze.g, haze.b))
 	m.set_shader_parameter("color_amount", color_amount)
+	m.set_shader_parameter("dawn", dawn)
+	for variant in ["drained", "dawn"]:
+		var path := TEX % (tex_name + "_" + variant)
+		if ResourceLoader.exists(path):
+			m.set_shader_parameter("tex_" + variant, load(path))
+			m.set_shader_parameter("has_" + variant, true)
 	_mats.append(m)
 	var mi := MeshInstance3D.new()
 	mi.name = tex_name.to_pascal_case()
@@ -129,12 +141,15 @@ func _build() -> void:
 
 	# The Watcher: straight across the crater from the shore you arrive on.
 	var w := _group("Watcher")
-	# The head is drawn small at the bottom of a wide strip; this size puts it about 1.8 km
-	# across, so from the rim it peeks over the far side of the crater.
-	var head := _cutout(w, "horizon_watcher_far", 3400.0, 225.0, 13000.0, 0.0, 320.0)
+	# The stone head, about 1 km across: from the rim its eyes clear the far side of the
+	# crater. Its bottom cut sits below the rim line, and the range tucks in round its sides.
+	var head := _cutout(w, "horizon_watcher_head", 3400.0, 225.0, 1000.0, -60.0)
 	_watcher_mat = head.material_override
 	_watcher_mat.set_shader_parameter("keep_red", 1.0)
 	_cutout(w, "horizon_watcher_range", 3500.0, 196.0, 4200.0, 30.0)
+	_cutout(w, "horizon_watcher_range", 3150.0, 239.0, 2400.0, 30.0)
+	var left := _cutout(w, "horizon_watcher_range", 3150.0, 211.0, 2400.0, 30.0)
+	left.scale.x = -1.0   # mirrored, so the two ranges cradle the head
 
 	# The beacon: the cone mountain at sea, dark until ember comes home.
 	var bd := _group("BeaconDark")

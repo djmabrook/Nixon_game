@@ -217,6 +217,7 @@ func _rings(count: int) -> Array[Color]:
 func _set_dawn(t: float) -> void:
 	_sky_mat.set_shader_parameter("dawn", t)
 	_landmarks.set("watcher_eyes", t < 0.5)
+	_landmarks.set("dawn", t)
 	# The sun rises where the moon has been throwing every shadow.
 	var toward: Vector3 = -_moon_basis.z
 	var sun := Vector3(toward.x, 0.0, toward.z).normalized()

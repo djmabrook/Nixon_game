@@ -56,6 +56,10 @@ extends Room
 @export var slide_fov := 72.0
 
 const DOOR_SCENE := preload("res://hub/props/region_door.tscn")
+const BLOOM_MASK := preload("res://hub/art/tex/groove_ink_bloom_mask.png")
+const BLOOM_SHADER := preload("res://hub/ink_bloom.gdshader")
+## Size (m) of the ink bloom painted on the sand where each groove meets its door.
+const BLOOM_SIZE := 46.0
 ## Each region's own door: a room whose id contains the key gets that model
 ## (art/models/<value>.glb). Anything else gets the plain bone monolith.
 const DOOR_VARIANTS := {
@@ -77,6 +81,7 @@ var _arm_colors: Array[Color] = []
 var _arm_reach: Array[float] = []
 var _open: Array[bool] = []
 var _stakes: Array = []
+var _blooms: Array[ShaderMaterial] = []
 var _room_inks := {}   # room id -> the ink it gives
 var _was_sliding := false
 
@@ -231,6 +236,9 @@ func room_open(room_id: StringName) -> bool:
 func set_arm_fill(i: int, fill: float) -> void:
 	if i >= 0 and i < 16:
 		_arm_colors[i].a = fill
+	# The bloom opens once the ink reaches the door.
+	if i >= 0 and i < _blooms.size():
+		_blooms[i].set_shader_parameter("grow", clampf((fill - 0.85) / 0.15, 0.0, 1.0))
 
 
 ## How far out (m) the groove is drawn. 0 hides a locked groove.
@@ -304,6 +312,25 @@ func _add_arm(i: int) -> void:
 	stake.set_meta("room_id", id)
 	stake.visible = _open[i] if i < _open.size() else true
 	_stakes.append(stake)
+
+	# The ink bloom on the sand in front of the door; it grows as the ink fills the groove.
+	var bloom := MeshInstance3D.new()
+	bloom.name = "Bloom_%s" % id
+	var pm := PlaneMesh.new()
+	pm.size = Vector2(BLOOM_SIZE, BLOOM_SIZE)
+	bloom.mesh = pm
+	var bm := ShaderMaterial.new()
+	bm.shader = BLOOM_SHADER
+	bm.set_shader_parameter("mask", BLOOM_MASK)
+	var ink_c := room_color(id)
+	bm.set_shader_parameter("tint", Color(ink_c.r, ink_c.g, ink_c.b))
+	bm.set_shader_parameter("grow", 0.0)
+	bloom.material_override = bm
+	bloom.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(bloom)
+	bloom.position = _sand.ground_point(Vector2(out.x, out.z) * (arm_outer_radius - 4.0)) + Vector3.UP * 0.12
+	bloom.rotation.y = float(hash(String(id)) % 628) / 100.0
+	_blooms.append(bm)
 
 	# Return spot: a little way up the groove, facing out of the pit.
 	var spawn := RoomSpawn.new()

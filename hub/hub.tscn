@@ -1,0 +1,65 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://hub/hub.gd" id="1"]
+[ext_resource type="Script" path="res://core/room_spawn.gd" id="2"]
+[ext_resource type="PackedScene" path="res://props/watching_set.tscn" id="3"]
+
+[sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
+sky_top_color = Color(0.02, 0.02, 0.06, 1)
+sky_horizon_color = Color(0.25, 0.18, 0.3, 1)
+ground_horizon_color = Color(0.25, 0.18, 0.3, 1)
+ground_bottom_color = Color(0.02, 0.02, 0.04, 1)
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+
+[sub_resource type="Environment" id="env"]
+background_mode = 2
+sky = SubResource("sky")
+ambient_light_source = 3
+ambient_light_energy = 0.5
+tonemap_mode = 2
+fog_enabled = true
+fog_light_color = Color(0.25, 0.18, 0.3, 1)
+fog_density = 0.005
+fog_sky_affect = 0.6
+
+[sub_resource type="CylinderShape3D" id="floor_shape"]
+height = 2.0
+radius = 200.0
+
+[sub_resource type="CylinderMesh" id="floor_mesh"]
+top_radius = 200.0
+bottom_radius = 200.0
+height = 2.0
+radial_segments = 128
+
+[node name="Hub" type="Node3D"]
+script = ExtResource("1")
+camera_distance = 9.0
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 6, 0)
+shadow_enabled = true
+directional_shadow_max_distance = 400.0
+
+[node name="Floor" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor"]
+shape = SubResource("floor_shape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Floor"]
+mesh = SubResource("floor_mesh")
+
+[node name="center" type="Marker3D" parent="."]
+script = ExtResource("2")
+is_default = true
+
+[node name="WatchingSet" parent="." instance=ExtResource("3")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -12)
+close_on_room_complete = false
+droop_with_inks = true

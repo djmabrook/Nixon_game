@@ -86,6 +86,20 @@ var _was_sliding := false
 @onready var _footprints: Node3D = $Footprints
 @onready var _focus_point: Node3D = $Vortex/FocusPoint
 @onready var _sand_mat: ShaderMaterial = _sand.material
+## The surf terrain (hub/hub_surf.gd). While it's enabled the little man surfs the crater.
+@onready var _surf: SurfTerrain = get_node_or_null(^"Surf")
+
+@export_group("Surf")
+## Inward push (m/s²) riding down a groove toward the pit: the grooves are fast lanes.
+@export var groove_push := 7.0
+## The sand's current up the outer dunes toward the rim (m/s², fades with speed).
+@export var dune_current := 4.0
+## Gates down each open groove: spacing (m) and how high their centre floats over the sand.
+@export var gate_spacing := 70.0
+@export var gate_height := 2.7
+## The lip gate: high over the rim at the top of each groove, for the ones who launch.
+@export var lip_gate_height := 16.0
+@export_group("")
 
 
 func _ready() -> void:
@@ -150,6 +164,7 @@ func _ready() -> void:
 	var tv_spot: Node3D = $StoryAnchors/first_tv
 	tv.position = tv_spot.position + Vector3.DOWN * 1.2
 	_add_audio()
+	_setup_surf()
 
 
 ## Sound (audio/AUDIO.md). Added only when the sound system is in the project, so the hub
@@ -387,6 +402,8 @@ func _mark_ridden(id: StringName) -> void:
 ## A ring of trigger boxes along the ridge: the first time you top it, the camera
 ## pulls far back over the crater and looks down into the pit.
 func _build_rim_vista() -> void:
+	if surfing():
+		return   # at surfing speed a 4 s fly-away shot would steal the ride
 	var zone := VistaZone.new()
 	zone.name = "RimVista"
 	zone.look_target = _focus_point
@@ -414,6 +431,9 @@ func _physics_process(delta: float) -> void:
 	if not p.is_physics_processing():
 		_on_travel_done()
 	_pull_grace = maxf(_pull_grace - delta, 0.0)
+	if surfing():
+		_surf_currents(p)
+		return
 	var grace_t := 1.0 - _pull_grace / maxf(arrival_grace, 0.001)
 	var local := to_local(p.global_position)
 	var flat := Vector2(local.x, local.z)
@@ -544,3 +564,88 @@ func _on_swallowed(p: Player, room_id: StringName) -> void:
 ## i.e. he walked (most of) the groove rather than cutting across the pit floor.
 func _arm_reached_from_rim(i: int) -> bool:
 	return _max_r_on.get(i, 0.0) > _sand.crest_radius * 0.6
+
+
+# ------------------------------------------------------------------ surfing
+
+## True when the little man surfs the crater (the Surf node is there and enabled).
+func surfing() -> bool:
+	return _surf != null and _surf.enabled
+
+
+func _setup_surf() -> void:
+	if not surfing():
+		return
+	var origin := _sand.global_position
+	_surf.base_func = func(xz: Vector2) -> float:
+		return origin.y + _sand.height_xz(xz - Vector2(origin.x, origin.z))
+	_surf.ground_bodies = [_sand.get_rid()]
+	_surf.add_material(_sand_mat)
+	# Keep the swells off everything that stands on the sand.
+	for st in _stakes:
+		_surf.add_calm_spot((st as Node3D).global_position, 26.0)
+	_surf.add_calm_spot($WatchingSet.global_position, 14.0)
+	var art := get_node_or_null(^"Art")
+	if art:
+		for c in art.get_children():
+			if c is Node3D:
+				_surf.add_calm_spot((c as Node3D).global_position, 40.0)
+	_build_gates()
+
+
+## Lines of gates down each open groove, from the beach to the pit, in the room's colour;
+## one more high over the rim where the groove crosses it, for a launch off the lip.
+func _build_gates() -> void:
+	var gates := Node3D.new()
+	gates.name = "Gates"
+	add_child(gates)
+	var crest: float = _sand.crest_radius
+	for i in _ids.size():
+		if i < _open.size() and not _open[i]:
+			continue
+		var col := room_color(_ids[i])
+		var r := arm_outer_radius - 40.0
+		while r > pit_radius + 40.0:
+			if absf(r - crest) > 25.0:
+				_add_gate(gates, i, r, gate_height, col)
+			r -= gate_spacing
+		_add_gate(gates, i, crest - 4.0, lip_gate_height, col.lightened(0.3), 4.5)
+
+
+func _add_gate(parent: Node3D, arm: int, r: float, h: float, col: Color, radius := 3.4) -> void:
+	var g := FlowGate.new()
+	g.color = col
+	g.radius = radius
+	parent.add_child(g)
+	var at := arm_point(arm, r)
+	var d := _arm_inward(arm, r)
+	g.global_position = at + Vector3.UP * h
+	g.look_at(g.global_position + Vector3(d.x, 0.0, d.y), Vector3.UP)
+	g.hover = h
+
+
+func _surf_currents(p: Player) -> void:
+	var s := p.get_node_or_null(^"Surfer") as Surfer
+	if s == null or s.state != Surfer.State.RIDE:
+		return
+	var local := to_local(s.pos)
+	var flat := Vector2(local.x, local.z)
+	var r := flat.length()
+	if r < 0.01:
+		return
+	var inward := -flat / r
+	var v := Vector2(s.vel.x, s.vel.z)
+	# Grooves are fast lanes toward the pit.
+	var arm := _arm_under(s.pos)
+	if arm >= 0:
+		var down := _arm_inward(arm, r)
+		var along := v.normalized().dot(down) if v.length() > 1.0 else 0.0
+		if along > 0.3:
+			s.push(Vector3(down.x, 0.0, down.y) * groove_push * along)
+	# The outer dunes flow up to the rim, so the beach never strands you.
+	var crest: float = _sand.crest_radius
+	if r > crest + 5.0 and r < _sand.shore_radius:
+		var t := smoothstep(crest + 5.0, crest + 60.0, r)
+		var slow := 1.0 - smoothstep(10.0, 22.0, v.length())
+		var going_in := clampf(v.normalized().dot(inward) * 0.5 + 0.5, 0.0, 1.0) if v.length() > 1.0 else 1.0
+		s.push(Vector3(inward.x, 0.0, inward.y) * dune_current * t * maxf(slow, going_in * 0.6))

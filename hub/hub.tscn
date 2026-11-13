@@ -1,6 +1,7 @@
-[gd_scene load_steps=26 format=3]
+[gd_scene load_steps=27 format=3]
 
 [ext_resource type="Script" path="res://hub/hub.gd" id="1"]
+[ext_resource type="Script" path="res://hub/hub_surf.gd" id="surf_terrain"]
 [ext_resource type="Script" path="res://core/room_spawn.gd" id="2"]
 [ext_resource type="Script" path="res://hub/sand_vortex.gd" id="3"]
 [ext_resource type="Shader" path="res://hub/sand.gdshader" id="4"]
@@ -115,6 +116,9 @@ light_color = Color(0.62, 0.7, 1, 1)
 light_energy = 0.55
 shadow_enabled = true
 directional_shadow_max_distance = 500.0
+
+[node name="Surf" type="Node3D" parent="."]
+script = ExtResource("surf_terrain")
 
 [node name="SandVortex" type="StaticBody3D" parent="."]
 script = ExtResource("3")

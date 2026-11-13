@@ -49,6 +49,13 @@ extends StaticBody3D
 		if _mesh:
 			_mesh.material_override = v
 
+## With a surf terrain the crater is a bowl: flat out to this radius, then u^power up to the lip.
+@export var surf_floor_radius := 48.0
+@export var surf_bowl_power := 2.1
+## The surf terrain (hub/hub_surf.gd, a sibling named Surf): its static dunes are baked into
+## this mesh and collision, and its moving swells are drawn by the sand shader.
+var surf: SurfTerrain
+
 var _rebuild_queued := false
 var _radii: PackedFloat32Array = []
 var _faces := PackedVector3Array()
@@ -60,6 +67,7 @@ var _shape: CollisionShape3D
 func _ready() -> void:
 	collision_layer = 1
 	collision_mask = 0
+	surf = get_parent().get_node_or_null(^"Surf") as SurfTerrain if get_parent() else null
 	_mesh = MeshInstance3D.new()
 	_mesh.name = "Mesh"
 	_mesh.material_override = material
@@ -73,7 +81,12 @@ func _ready() -> void:
 ## Ground height at a distance `r` from the center (local space).
 func height_at(r: float) -> float:
 	var h: float
-	if r <= crest_radius:
+	if r <= crest_radius and surf != null:
+		# Surfed: a bowl. Flat at the pit, the wall steepening all the way up to a lip at
+		# the ridge (about 40°), so dropping in is instant and riding up it launches you.
+		var u := clampf((r - surf_floor_radius) / (crest_radius - surf_floor_radius), 0.0, 1.0)
+		h = -pit_depth + (crest_height + pit_depth) * pow(u, surf_bowl_power)
+	elif r <= crest_radius:
 		# Crater: flat floor at the pit, a long curving wall up to the ridge.
 		var t := r / crest_radius
 		h = lerpf(-pit_depth, crest_height, 0.5 - 0.5 * cos(PI * pow(t, 1.15)))
@@ -85,17 +98,25 @@ func height_at(r: float) -> float:
 	return h - 8.0 * smoothstep(shore_radius - 20.0, radius, r)
 
 
+## Ground height at a (local) xz position: the funnel plus the surf terrain's static dunes.
+func height_xz(xz: Vector2) -> float:
+	var h := height_at(xz.length())
+	if surf:
+		h += surf.static_extra(xz)
+	return h
+
+
 ## Surface normal of the smooth shape at a (local) xz position.
 func normal_at(xz: Vector2) -> Vector3:
 	var e := 0.25
-	var hx := height_at((xz + Vector2(e, 0)).length()) - height_at((xz - Vector2(e, 0)).length())
-	var hz := height_at((xz + Vector2(0, e)).length()) - height_at((xz - Vector2(0, e)).length())
+	var hx := height_xz(xz + Vector2(e, 0)) - height_xz(xz - Vector2(e, 0))
+	var hz := height_xz(xz + Vector2(0, e)) - height_xz(xz - Vector2(0, e))
 	return Vector3(-hx, 2.0 * e, -hz).normalized()
 
 
 ## Point on the smooth surface (used to build the mesh).
 func smooth_point(xz: Vector2) -> Vector3:
-	return Vector3(xz.x, height_at(xz.length()), xz.y)
+	return Vector3(xz.x, height_xz(xz), xz.y)
 
 
 ## Point on the actual triangle mesh under a (local) xz position, so things placed
@@ -123,7 +144,7 @@ func ground_point(xz: Vector2) -> Vector3:
 	for t in tris:
 		var bc := _barycentric(xz, t[0], t[1], t[2])
 		if bc.x >= -0.001 and bc.y >= -0.001 and bc.z >= -0.001:
-			var h: float = bc.x * height_at(t[0].length()) + bc.y * height_at(t[1].length()) + bc.z * height_at(t[2].length())
+			var h: float = bc.x * height_xz(t[0]) + bc.y * height_xz(t[1]) + bc.z * height_xz(t[2])
 			return Vector3(xz.x, h, xz.y)
 	return smooth_point(xz)
 

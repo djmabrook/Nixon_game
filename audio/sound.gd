@@ -281,6 +281,93 @@ func is_hushed() -> bool:
 	return _hushed
 
 
+# ------------------------------------------------------------------ music
+
+## Alberto's soundtrack. Drop audio files in res://music/ and they play by themselves:
+##   res://music/<room_id>.ogg (or .mp3 / .wav)  plays in that room,
+##   res://music/surf.ogg                        plays anywhere that has no track of its own.
+## Tracks loop and crossfade on room change. Everything goes to the Music bus, whose low-pass
+## opens with the rider's flow (set_music_intensity), so the music blooms as he surfs well.
+const MUSIC_DIR := "res://music"
+const MUSIC_EXTS := ["ogg", "mp3", "wav"]
+## Level of the soundtrack (dB) at full intensity.
+var music_db := -6.0
+var _music_players: Array[AudioStreamPlayer] = []
+var _music_index := 0
+var _music_path := ""
+var _music_intensity := 1.0
+
+
+## Play a track (an AudioStream or a res:// path), crossfading from the current one.
+## Pass null or "" to fade the music out.
+func play_music(stream_or_path: Variant, fade := 2.0) -> void:
+	var stream: AudioStream = null
+	var path := ""
+	if stream_or_path is AudioStream:
+		stream = stream_or_path
+		path = stream.resource_path
+	elif stream_or_path is String and stream_or_path != "":
+		path = stream_or_path
+		if ResourceLoader.exists(path):
+			stream = load(path)
+	if path != "" and path == _music_path:
+		return
+	_music_path = path
+	if _music_players.is_empty():
+		for i in 2:
+			var p := AudioStreamPlayer.new()
+			p.bus = &"Music"
+			p.volume_db = SILENT_DB
+			add_child(p)
+			_music_players.append(p)
+	var old := _music_players[_music_index]
+	if old.playing:
+		create_tween().tween_property(old, "volume_db", SILENT_DB, fade).finished.connect(old.stop)
+	if stream == null:
+		return
+	_set_loop(stream)
+	_music_index = 1 - _music_index
+	var p := _music_players[_music_index]
+	p.stream = stream
+	p.volume_db = SILENT_DB
+	p.play()
+	create_tween().tween_property(p, "volume_db", music_db, fade)
+
+
+func stop_music(fade := 2.0) -> void:
+	play_music(null, fade)
+
+
+func music_path() -> String:
+	return _music_path
+
+
+## 0..1: how open the soundtrack is. Low intensity is muffled and far; 1 is the full mix.
+## The Surfer drives this with flow; any room can too.
+func set_music_intensity(amount: float) -> void:
+	_music_intensity = clampf(amount, 0.0, 1.0)
+	var bus := AudioServer.get_bus_index(&"Music")
+	if bus < 0 or AudioServer.get_bus_effect_count(bus) == 0:
+		return
+	var lp := AudioServer.get_bus_effect(bus, 0) as AudioEffectLowPassFilter
+	if lp:
+		lp.cutoff_hz = lerpf(700.0, 20000.0, pow(_music_intensity, 2.0))
+
+
+func get_music_intensity() -> float:
+	return _music_intensity
+
+
+## The track for a room: res://music/<room_id>.*, else res://music/surf.*, else "".
+func music_for(room_id: StringName) -> String:
+	for base in [String(room_id), "surf"]:
+		for ext in MUSIC_EXTS:
+			var path := "%s/%s.%s" % [MUSIC_DIR, base, ext]
+			if ResourceLoader.exists(path):
+				return path
+	return ""
+
+
 # ------------------------------------------------------------------ rooms
 
 func _on_room_changed(room: Node) -> void:
@@ -304,6 +391,10 @@ func _on_room_changed(room: Node) -> void:
 	var game := get_node_or_null(^"/root/Game")
 	if game and is_instance_valid(game.player):
 		_footsteps.attach(game.player)
+	var rid: StringName = room.get(&"room_id") if room.get(&"room_id") != null else &""
+	var track := music_for(rid)
+	if track != "" or _music_path != "":
+		play_music(track, 2.5)
 
 
 # ------------------------------------------------------------------ internals

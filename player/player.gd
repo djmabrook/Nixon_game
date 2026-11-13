@@ -34,6 +34,10 @@ signal walking_changed(is_walking: bool)
 ## When true, shadow_lag tracks Game.shadow_lag() as inks come home.
 @export var shadow_lag_from_story := true
 
+## Something else moving him (the Surfer, surf/surfer.gd). While its is_driving() is true,
+## the walking physics and clips step aside and it calls driver.drive(delta) instead.
+var driver: Node = null
+
 ## Last non-zero walk direction on the ground plane (unit vector, world space).
 var facing := Vector3.FORWARD
 var is_walking := false
@@ -72,6 +76,9 @@ func _process(_delta: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if driver and driver.is_driving():
+		driver.drive(delta)
+		return
 	var dir := get_move_direction() if controls_enabled else Vector3.ZERO
 	var speed := run_speed if controls_enabled and Input.is_action_pressed(&"run") else move_speed
 	var target := dir * speed
@@ -140,6 +147,8 @@ func _refresh_carry(ink: StringName) -> void:
 
 
 func _update_shadow() -> void:
+	if driver and driver.is_driving():
+		return   # the driver poses the late shadow itself
 	var now := Time.get_ticks_msec() / 1000.0
 	_history.append([now, global_transform, visual.rotation.y, model.current, model.anim.speed_scale])
 	var cutoff := now - shadow_lag

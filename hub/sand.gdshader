@@ -61,7 +61,11 @@ uniform float ridge_tile_amount = 0.55;
 
 varying vec3 world_pos;
 
+#include "res://surf/surf_waves.gdshaderinc"
+
 void vertex() {
+	// The moving swells (hub/hub_surf.gd feeds the numbers; the rider's physics uses the same).
+	surf_displace(VERTEX, NORMAL, MODEL_MATRIX);
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 }
 

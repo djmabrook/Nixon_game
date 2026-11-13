@@ -1,0 +1,150 @@
+[gd_scene load_steps=24 format=3]
+
+[ext_resource type="Script" path="res://rooms/_stray_demo/stray_demo.gd" id="1"]
+[ext_resource type="Script" path="res://core/room_spawn.gd" id="2"]
+[ext_resource type="Script" path="res://core/room_exit.gd" id="3"]
+[ext_resource type="PackedScene" path="res://companions/stray/stray.tscn" id="4"]
+[ext_resource type="PackedScene" path="res://props/watching_set.tscn" id="5"]
+[ext_resource type="Script" path="res://companions/stray/stray_interest.gd" id="6"]
+
+[sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
+sky_top_color = Color(0.02, 0.018, 0.02, 1)
+sky_horizon_color = Color(0.3, 0.12, 0.08, 1)
+ground_horizon_color = Color(0.3, 0.12, 0.08, 1)
+ground_bottom_color = Color(0.03, 0.025, 0.025, 1)
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+
+[sub_resource type="Environment" id="env"]
+background_mode = 2
+sky = SubResource("sky")
+ambient_light_source = 3
+ambient_light_energy = 0.5
+tonemap_mode = 2
+fog_enabled = true
+fog_light_color = Color(0.3, 0.12, 0.08, 1)
+fog_density = 0.006
+fog_sky_affect = 0.6
+
+[sub_resource type="BoxShape3D" id="floor_shape"]
+size = Vector3(800, 2, 800)
+
+[sub_resource type="StandardMaterial3D" id="floor_mat"]
+albedo_color = Color(0.16, 0.12, 0.1, 1)
+roughness = 1.0
+
+[sub_resource type="BoxMesh" id="floor_mesh"]
+material = SubResource("floor_mat")
+size = Vector3(800, 2, 800)
+
+[sub_resource type="BoxShape3D" id="tower_shape"]
+size = Vector3(14, 120, 14)
+
+[sub_resource type="StandardMaterial3D" id="tower_mat"]
+albedo_color = Color(0.05, 0.043, 0.04, 1)
+roughness = 1.0
+
+[sub_resource type="BoxMesh" id="tower_mesh"]
+material = SubResource("tower_mat")
+size = Vector3(14, 120, 14)
+
+[sub_resource type="StandardMaterial3D" id="lamp_mat"]
+albedo_color = Color(0.94, 0.26, 0.12, 1)
+emission_enabled = true
+emission = Color(0.94, 0.26, 0.12, 1)
+emission_energy_multiplier = 2.0
+
+[sub_resource type="SphereMesh" id="lamp_mesh"]
+material = SubResource("lamp_mat")
+radius = 2.5
+height = 5.0
+
+[sub_resource type="StandardMaterial3D" id="door_mat"]
+albedo_color = Color(0.94, 0.9, 0.85, 1)
+roughness = 1.0
+
+[sub_resource type="BoxMesh" id="door_mesh"]
+material = SubResource("door_mat")
+size = Vector3(1.2, 2.4, 0.3)
+
+[sub_resource type="BoxShape3D" id="exit_shape"]
+size = Vector3(3, 3, 3)
+
+[sub_resource type="BoxMesh" id="exit_mesh"]
+material = SubResource("door_mat")
+size = Vector3(3, 0.1, 3)
+
+[node name="Room" type="Node3D" node_paths=PackedStringArray("focus_target")]
+script = ExtResource("1")
+gives_ink = &"ember"
+focus_target = NodePath("Tower")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.866025, -0.40558, 0.29277, 0, 0.584958, 0.811064, -0.5, -0.702486, 0.507093, 0, 50, 0)
+shadow_enabled = true
+directional_shadow_max_distance = 200.0
+
+[node name="Floor" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1, 0)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Floor"]
+shape = SubResource("floor_shape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Floor"]
+mesh = SubResource("floor_mesh")
+
+[node name="Tower" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 60, -160)
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Tower"]
+shape = SubResource("tower_shape")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Tower"]
+mesh = SubResource("tower_mesh")
+
+[node name="Lamp" type="MeshInstance3D" parent="Tower"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 62, 0)
+mesh = SubResource("lamp_mesh")
+
+[node name="TowerInterest" type="Marker3D" parent="Tower"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 20, 0)
+script = ExtResource("6")
+notice_radius = 170.0
+
+[node name="SmallDoor" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.707107, 0, 0.707107, 0, 1, 0, -0.707107, 0, 0.707107, 26, 1.2, -38)
+mesh = SubResource("door_mesh")
+
+[node name="DoorInterest" type="Marker3D" parent="SmallDoor"]
+script = ExtResource("6")
+notice_radius = 22.0
+priority = 2.0
+
+[node name="AwakeSet" parent="." instance=ExtResource("5")]
+transform = Transform3D(0.866025, 0, 0.5, 0, 1, 0, -0.5, 0, 0.866025, -45, 0, -40)
+
+[node name="SleepingSet" parent="." instance=ExtResource("5")]
+transform = Transform3D(0.866025, 0, -0.5, 0, 1, 0, 0.5, 0, 0.866025, 30, 0, 10)
+mode = 2
+
+[node name="Stray" parent="." instance=ExtResource("4")]
+
+[node name="from_hub" type="Marker3D" parent="."]
+script = ExtResource("2")
+is_default = true
+
+[node name="ExitToHub" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 14)
+script = ExtResource("3")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="ExitToHub"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+shape = SubResource("exit_shape")
+
+[node name="Marker" type="MeshInstance3D" parent="ExitToHub"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.05, 0)
+mesh = SubResource("exit_mesh")

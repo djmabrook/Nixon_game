@@ -1,0 +1,269 @@
+[gd_scene load_steps=26 format=3]
+
+[ext_resource type="Script" path="res://hub/hub.gd" id="1"]
+[ext_resource type="Script" path="res://core/room_spawn.gd" id="2"]
+[ext_resource type="Script" path="res://hub/sand_vortex.gd" id="3"]
+[ext_resource type="Shader" path="res://hub/sand.gdshader" id="4"]
+[ext_resource type="Shader" path="res://hub/sea.gdshader" id="5"]
+[ext_resource type="Script" path="res://hub/vortex.gd" id="6"]
+[ext_resource type="PackedScene" path="res://hub/props/palm.tscn" id="7"]
+[ext_resource type="Script" path="res://hub/footprints.gd" id="8"]
+[ext_resource type="Shader" path="res://hub/night_sky.gdshader" id="9"]
+[ext_resource type="Script" path="res://hub/landmarks.gd" id="10"]
+[ext_resource type="Script" path="res://hub/hub_story.gd" id="11"]
+[ext_resource type="PackedScene" path="res://props/watching_set.tscn" id="12"]
+[ext_resource type="Script" path="res://hub/hub_art.gd" id="13"]
+[ext_resource type="Texture2D" path="res://hub/art/tex/sky_ember_night.png" id="14"]
+[ext_resource type="Texture2D" path="res://hub/art/tex/sky_dawn.png" id="15"]
+[ext_resource type="Texture2D" path="res://hub/art/tex/sun_pale.png" id="16"]
+[ext_resource type="Texture2D" path="res://hub/art/tex/sand_ridges_tile.png" id="17"]
+[ext_resource type="Texture2D" path="res://hub/art/tex/sky_pink_storm.png" id="18"]
+
+[sub_resource type="ShaderMaterial" id="sky_mat"]
+shader = ExtResource("9")
+shader_parameter/night_strip = ExtResource("14")
+shader_parameter/dawn_strip = ExtResource("15")
+shader_parameter/sun_tex = ExtResource("16")
+shader_parameter/storm_strip = ExtResource("18")
+
+[sub_resource type="Sky" id="sky"]
+sky_material = SubResource("sky_mat")
+
+[sub_resource type="Environment" id="env"]
+background_mode = 2
+sky = SubResource("sky")
+ambient_light_source = 2
+ambient_light_color = Color(0.75, 0.42, 0.36, 1)
+ambient_light_energy = 0.6
+tonemap_mode = 2
+glow_enabled = true
+glow_intensity = 0.9
+glow_bloom = 0.08
+glow_hdr_threshold = 0.9
+fog_enabled = true
+fog_light_color = Color(0.3, 0.06, 0.05, 1)
+fog_density = 0.0011
+fog_sky_affect = 0.0
+fog_height = -40.0
+fog_height_density = 0.012
+
+[sub_resource type="ShaderMaterial" id="sand_mat"]
+render_priority = 0
+shader = ExtResource("4")
+shader_parameter/ridge_tile = ExtResource("17")
+
+[sub_resource type="ShaderMaterial" id="sea_mat"]
+render_priority = 0
+shader = ExtResource("5")
+
+[sub_resource type="PlaneMesh" id="sea_mesh"]
+material = SubResource("sea_mat")
+size = Vector2(9000, 9000)
+
+[sub_resource type="CylinderShape3D" id="pit_shape"]
+height = 16.0
+radius = 39.0
+
+[sub_resource type="StandardMaterial3D" id="ember_mat"]
+shading_mode = 0
+vertex_color_use_as_albedo = true
+billboard_mode = 1
+transparency = 1
+
+[sub_resource type="QuadMesh" id="ember_mesh"]
+material = SubResource("ember_mat")
+size = Vector2(1.6, 1.6)
+
+[sub_resource type="Gradient" id="ember_ramp"]
+offsets = PackedFloat32Array(0, 0.15, 1)
+colors = PackedColorArray(1, 0.85, 0.5, 0, 1, 0.4, 0.12, 1, 0.6, 0.05, 0.1, 0)
+
+[sub_resource type="StandardMaterial3D" id="rock_mat"]
+albedo_color = Color(0.36, 0.09, 0.06, 1)
+roughness = 1.0
+
+[sub_resource type="CylinderMesh" id="rock_mesh"]
+material = SubResource("rock_mat")
+top_radius = 0.6
+bottom_radius = 3.2
+height = 2.0
+radial_segments = 7
+rings = 1
+
+[sub_resource type="CylinderMesh" id="rock_small"]
+material = SubResource("rock_mat")
+top_radius = 0.2
+bottom_radius = 1.4
+height = 1.2
+radial_segments = 5
+rings = 1
+
+[node name="Hub" type="Node3D"]
+script = ExtResource("1")
+camera_distance = 9.0
+camera_pitch_degrees = -8.0
+camera_fov = 55.0
+camera_far = 9000.0
+clear_color = Color(0.035, 0.008, 0.02, 1)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="Moon" type="DirectionalLight3D" parent="."]
+transform = Transform3D(-0.6000, 0.0000, 0.8000, 0.4998, 0.7809, 0.3748, -0.6247, 0.6247, -0.4685, 0, 40, 0)
+light_color = Color(0.62, 0.7, 1, 1)
+light_energy = 0.55
+shadow_enabled = true
+directional_shadow_max_distance = 500.0
+
+[node name="SandVortex" type="StaticBody3D" parent="."]
+script = ExtResource("3")
+material = SubResource("sand_mat")
+
+[node name="Sea" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -1.2, 0)
+mesh = SubResource("sea_mesh")
+cast_shadow = 0
+
+[node name="Footprints" type="MultiMeshInstance3D" parent="."]
+script = ExtResource("8")
+
+[node name="Vortex" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -110, 0)
+script = ExtResource("6")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Vortex"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 4, 0)
+shape = SubResource("pit_shape")
+
+[node name="Embers" type="CPUParticles3D" parent="Vortex"]
+amount = 1600
+lifetime = 22.0
+preprocess = 22.0
+visibility_aabb = AABB(-200, -10, -200, 400, 700, 400)
+mesh = SubResource("ember_mesh")
+emission_shape = 6
+emission_ring_axis = Vector3(0, 1, 0)
+emission_ring_height = 2.0
+emission_ring_radius = 42.0
+emission_ring_inner_radius = 10.0
+direction = Vector3(0, 1, 0)
+spread = 12.0
+gravity = Vector3(0, 1.2, 0)
+initial_velocity_min = 6.0
+initial_velocity_max = 16.0
+tangential_accel_min = 2.0
+tangential_accel_max = 5.0
+damping_min = 0.05
+damping_max = 0.2
+scale_amount_min = 0.6
+scale_amount_max = 2.6
+color_ramp = SubResource("ember_ramp")
+
+[node name="FocusPoint" type="Marker3D" parent="Vortex"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 20, 0)
+
+[node name="PitGlow" type="OmniLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -10, 0)
+light_color = Color(1, 0.32, 0.12, 1)
+light_energy = 40.0
+omni_range = 420.0
+omni_attenuation = 1.0
+
+[node name="from_start" type="Marker3D" parent="."]
+transform = Transform3D(0.7071, 0, 0.7071, 0, 1, 0, -0.7071, 0, 0.7071, 735.0, 0, 590.0)
+script = ExtResource("2")
+is_default = true
+
+[node name="InkState" type="Node" parent="."]
+script = ExtResource("11")
+
+[node name="StoryAnchors" type="Node3D" parent="."]
+
+[node name="shore_wake" type="Marker3D" parent="StoryAnchors" groups=["story_anchor"]]
+transform = Transform3D(0.7071, 0.0000, 0.7071, 0.0000, 1.0000, 0.0000, -0.7071, 0.0000, 0.7071, 696.50, 0, 696.50)
+
+[node name="first_tv" type="Marker3D" parent="StoryAnchors" groups=["story_anchor"]]
+transform = Transform3D(0.7071, 0.0000, 0.7071, 0.0000, 1.0000, 0.0000, -0.7071, 0.0000, 0.7071, 594.11, 0, 760.43)
+
+[node name="margin_exit" type="Marker3D" parent="StoryAnchors" groups=["story_anchor"]]
+transform = Transform3D(0.2588, 0.0000, 0.9659, 0.0000, 1.0000, 0.0000, -0.9659, 0.0000, 0.2588, -256.23, 0, 956.27)
+
+[node name="WatchingSet" parent="." instance=ExtResource("12")]
+transform = Transform3D(2.1213, 0, 2.1213, 0, 3, 0, -2.1213, 0, 2.1213, 594.11, 0, 760.43)
+droop_with_inks = true
+
+[node name="Landmarks" type="Node3D" parent="."]
+script = ExtResource("10")
+
+[node name="Scenery" type="Node3D" parent="."]
+
+[node name="IslandWest" type="MeshInstance3D" parent="Scenery"]
+transform = Transform3D(38.691, 0.000, -11.969, 0.000, 40.500, 0.000, 11.969, 0.000, 38.691, -1237.834, -4.500, 173.950)
+mesh = SubResource("rock_mesh")
+
+[node name="IslandWestRock" type="MeshInstance3D" parent="Scenery"]
+transform = Transform3D(19.694, 0.000, -30.672, 0.000, 36.450, 0.000, 30.672, 0.000, 19.694, -1143.464, -6.750, 59.924)
+mesh = SubResource("rock_small")
+
+
+[node name="IslandEast" type="MeshInstance3D" parent="Scenery"]
+transform = Transform3D(38.691, 0.000, -11.969, 0.000, 40.500, 0.000, 11.969, 0.000, 38.691, 173.950, -4.500, -1237.834)
+mesh = SubResource("rock_mesh")
+
+[node name="IslandEastRock" type="MeshInstance3D" parent="Scenery"]
+transform = Transform3D(19.694, 0.000, -30.672, 0.000, 36.450, 0.000, 30.672, 0.000, 19.694, 257.586, -6.750, -1115.697)
+mesh = SubResource("rock_small")
+
+
+[node name="IslandNorth" type="MeshInstance3D" parent="Scenery"]
+transform = Transform3D(55.887, 0.000, -17.288, 0.000, 58.500, 0.000, 17.288, 0.000, 55.887, -1025.305, -4.500, -1025.305)
+mesh = SubResource("rock_mesh")
+
+[node name="IslandNorthRock" type="MeshInstance3D" parent="Scenery"]
+transform = Transform3D(28.447, 0.000, -44.303, 0.000, 52.650, 0.000, 44.303, 0.000, 28.447, -852.529, -6.750, -1016.031)
+mesh = SubResource("rock_small")
+
+
+[node name="PalmShore0" parent="Scenery" instance=ExtResource("7")]
+transform = Transform3D(6.769, 0.000, -3.229, 0.000, 7.500, 0.000, 3.229, 0.000, 6.769, 927.288, 0.000, 248.467)
+height = 3.6
+lean = 0.25
+
+[node name="PalmShore1" parent="Scenery" instance=ExtResource("7")]
+transform = Transform3D(-5.479, 0.000, -7.140, 0.000, 9.000, 0.000, 7.140, 0.000, -5.479, 248.467, 0.000, 927.288)
+height = 3.9
+lean = 0.30
+
+[node name="PalmShore2" parent="Scenery" instance=ExtResource("7")]
+transform = Transform3D(-10.422, 0.000, 1.280, 0.000, 10.500, 0.000, -1.280, 0.000, -10.422, -328.363, 0.000, 902.096)
+height = 4.2
+lean = 0.35
+
+[node name="PalmShore3" parent="Scenery" instance=ExtResource("7")]
+transform = Transform3D(0.262, 0.000, 7.495, 0.000, 7.500, 0.000, -7.495, 0.000, 0.262, -902.096, 0.000, 328.363)
+height = 4.5
+lean = 0.25
+
+[node name="PalmShore4" parent="Scenery" instance=ExtResource("7")]
+transform = Transform3D(3.804, 0.000, -8.157, 0.000, 9.000, 0.000, 8.157, 0.000, 3.804, -328.363, 0.000, -902.096)
+height = 3.6
+lean = 0.30
+
+[node name="PalmShore5" parent="Scenery" instance=ExtResource("7")]
+transform = Transform3D(-9.093, 0.000, -5.250, 0.000, 10.500, 0.000, 5.250, 0.000, -9.093, 480.002, 0.000, -831.383)
+height = 3.9
+lean = 0.35
+
+[node name="PalmShore6" parent="Scenery" instance=ExtResource("7")]
+transform = Transform3D(-5.910, 0.000, 4.617, 0.000, 7.500, 0.000, -4.617, 0.000, -5.910, 902.096, 0.000, -328.363)
+height = 4.2
+lean = 0.25
+
+[node name="PalmShore7" parent="Scenery" instance=ExtResource("7")]
+transform = Transform3D(1.315, 0.000, -8.903, 0.000, 9.000, 0.000, 8.903, 0.000, 1.315, 652.403, 0.000, 724.565)
+height = 4.5
+lean = 0.30
+
+[node name="Art" type="Node3D" parent="."]
+script = ExtResource("13")

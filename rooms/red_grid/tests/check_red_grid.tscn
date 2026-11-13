@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://rooms/red_grid/tests/check_red_grid.gd" id="1"]
+
+[node name="CheckRedGrid" type="Node"]
+script = ExtResource("1")

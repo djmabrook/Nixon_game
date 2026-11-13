@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="DitherLookSettings" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://shaders/dither_look_settings.gd" id="1_settings"]
+
+[resource]
+resource_name = "colossus_dusk"
+script = ExtResource("1_settings")
+palette = PackedColorArray(0.08627, 0.07451, 0.1098, 1, 0.1686, 0.149, 0.2, 1, 0.2745, 0.2431, 0.3098, 1, 0.4157, 0.3569, 0.4078, 1, 0.5765, 0.4784, 0.4627, 1, 0.7608, 0.5765, 0.4784, 1, 0.8863, 0.6902, 0.5333, 1, 0.9608, 0.8392, 0.6588, 1, 1, 0.9412, 0.8314, 1, 0.4784, 0.2745, 0.2118, 1, 0.698, 0.3725, 0.2706, 1, 0.8588, 0.5176, 0.3333, 1, 0.2275, 0.2784, 0.3529, 1, 0.3608, 0.4353, 0.5255, 1, 0.5451, 0.6196, 0.698, 1, 0.149, 0.1882, 0.1294, 1, 0.2824, 0.3294, 0.2196, 1)
+virtual_height = 180
+dither_spread = 0.2
+bayer_size = 3
+accent_threshold = 0.0
+contrast = 1.1
+brightness = 0.0
+saturation = 1.0
+grain = 0.0
+soft_sampling = true
+haze_steps = 4
+haze_color = Color(0.2745, 0.2431, 0.3098, 1)
+haze_start = 30.0
+haze_end = 1400.0
+haze_amount = 0.8
+outline_strength = 1.0
+outline_color = Color(0.08627, 0.07451, 0.1098, 1)
+outline_min_distance = 50.0

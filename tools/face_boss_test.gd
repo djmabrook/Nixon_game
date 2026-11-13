@@ -110,12 +110,12 @@ func _ready() -> void:
 	_place(player, Vector3(0, 1, 730))
 	cam.face_toward(face.centre())
 	await _seconds(1.2)
-	_check(face.sees_player and player.move_speed < 5.0 * 0.6, "open ground: it stares and slows him")
+	_check(face.sees_player and player.move_speed < room._base_walk * 0.6, "open ground: it stares and slows him")
 
 	# Crimson: on the laid disc the stare falls into a blind spot.
 	room.lay_disc()
 	await _frames(5)
-	_check(face.sees_player and player.move_speed > 4.9, "crimson disc: a blind spot for the stare")
+	_check(face.sees_player and player.move_speed > room._base_walk * 0.98, "crimson disc: a blind spot for the stare")
 
 	# Salmon: standing still, the land slides him toward the face. Walking, pink footing holds.
 	_place(player, player.global_position + Vector3(0, 0, -30))

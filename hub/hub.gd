@@ -56,6 +56,12 @@ extends Room
 @export var slide_fov := 72.0
 
 const DOOR_SCENE := preload("res://hub/props/region_door.tscn")
+## Each region's own door: a room whose id contains the key gets that model
+## (art/models/<value>.glb). Anything else gets the plain bone monolith.
+const DOOR_VARIANTS := {
+	"lake": &"door_lake", "checker": &"door_checker", "grid": &"door_grid", "y2k": &"door_grid",
+	"watch": &"door_watcher", "face": &"door_watcher",
+}
 const RIDDEN_META := &"hub_ridden_grooves"
 const InkState := preload("res://hub/hub_story.gd")
 
@@ -249,6 +255,14 @@ func set_arm_open(i: int, on: bool) -> void:
 			s.visible = on
 
 
+## The door model for a room (see DOOR_VARIANTS).
+func door_variant_for(id: StringName) -> StringName:
+	for key in DOOR_VARIANTS:
+		if String(id).contains(key):
+			return DOOR_VARIANTS[key]
+	return &"mega_door_monolith"
+
+
 func stakes() -> Array:
 	return _stakes
 
@@ -277,6 +291,7 @@ func _add_arm(i: int) -> void:
 	var stake: Node3D = DOOR_SCENE.instantiate()
 	stake.name = "Door_%s" % id
 	stake.set("hand", opens_with_eye(id))
+	stake.set("variant", door_variant_for(id))
 	add_child(stake)
 	var a := arm_angle(i, arm_outer_radius)
 	var out := Vector3(cos(a), 0.0, sin(a))

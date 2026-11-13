@@ -6,7 +6,7 @@ extends Node3D
 ## Same exports as the old ember stake: color, lit, light_range.
 
 const Palette := preload("res://hub/art_palette.gd")
-const DOOR := preload("res://hub/art/models/mega_door_monolith.glb")
+const MODELS := "res://hub/art/models/%s.glb"
 const RUST := Color(0.39, 0.06, 0.023)
 const HAND := preload("res://hub/art/models/usher_hand_plaza.glb")
 
@@ -22,6 +22,9 @@ const HAND := preload("res://hub/art/models/usher_hand_plaza.glb")
 	set(v):
 		light_range = v
 		_apply()
+## Which door model (art/models/<variant>.glb): mega_door_monolith, or a region's own
+## door_lake, door_grid, door_checker, door_watcher. They share size, pivot and opening.
+@export var variant := &"mega_door_monolith"
 ## Build the usher's hand plaza instead of a door (the groove that opens with the eye).
 @export var hand := false
 ## How far the model is sunk into the sand, in metres.
@@ -42,7 +45,10 @@ var _phase := 0.0
 
 func _ready() -> void:
 	add_to_group(&"hub_drainable")
-	_model = (HAND if hand else DOOR).instantiate()
+	var path := MODELS % variant
+	if not ResourceLoader.exists(path):
+		path = MODELS % "mega_door_monolith"
+	_model = (HAND if hand else load(path) as PackedScene).instantiate()
 	add_child(_model)
 	var seed_from := hash(name)
 	_phase = float(seed_from % 1000) / 1000.0 * TAU
